@@ -1,0 +1,21 @@
+[submodule "lib/sm_tinyfsm"]
+	path = lib/sm_tinyfsm
+	url = https://github.com/digint/tinyfsm.git
+[submodule "lib/sm_cppqueue"]
+	path = lib/sm_cppqueue
+	url = https://github.com/SMFSW/Queue.git
+[submodule "lib/sm_pid"]
+	path = lib/sm_pid
+	url = https://github.com/br3ttb/Arduino-PID-Library.git
+[submodule "lib/sm_asynctcp"]
+	path = lib/sm_asynctcp
+	url = https://github.com/me-no-dev/AsyncTCP.git
+[submodule "lib/sm_asyncmqtt"]
+	path = lib/sm_asyncmqtt
+	url = https://github.com/marvinroger/async-mqtt-client.git
+[submodule "lib/sm_json"]
+	path = lib/sm_json
+	url = https://github.com/bblanchon/ArduinoJson.git
+[submodule "lib/sm_servo"]
+	path = lib/sm_servo
+	url = https://github.com/w1102/ESP32Servo.git

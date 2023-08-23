@@ -1,0 +1,19 @@
+{
+    "name": "StateMachines",
+    "keywords": "",
+    "description": "",
+    "authors":
+    [
+      {
+        "name": "w1102"
+      }
+    ],
+    "frameworks": "*",
+    "build": {
+        "flags": [
+            "-I main/",
+            "-I network/"
+        ]
+    }
+  }
+  
