@@ -58,7 +58,7 @@ struct nwevent_mqtt_retain: nwevent {
 };
 
 struct nwevent_mqtt_retain_map: nwevent_mqtt_retain {};
-struct nwevent_mqtt_retain_location: nwevent_mqtt_retain {};
+struct nwevent_mqtt_retain_lineCount: nwevent_mqtt_retain {};
 struct nwevent_mqtt_take_mission: nwevent_mqtt_retain {};
 
 
@@ -86,7 +86,7 @@ class NetworkManager : public tinyfsm::Fsm<NetworkManager>
     virtual void react(nwevent_mqtt_disconnected const &) {};
     virtual void react(nwevent_mqtt_connected const &) {};
     virtual void react(nwevent_mqtt_retain_map const &) {};
-    virtual void react(nwevent_mqtt_retain_location const &) {};
+    virtual void react(nwevent_mqtt_retain_lineCount const &) {};
     virtual void react(nwevent_mqtt_take_mission const &) {};
 
     /* entry actions in some states */

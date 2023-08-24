@@ -6,7 +6,6 @@
 #include "main.task.h"
 #include "network.task.h"
 
-
 void setup()
 {
     Serial.begin(115200);

@@ -22,9 +22,16 @@ xSemaphoreHandle missionMutex;
 
 QueueHandle_t currentLineCountQueue;
 
+
+
+xSemaphoreHandle missionSync = nullptr;
+
 void
 initMutex ()
 {
+    missionSync = xSemaphoreCreateBinary();
+    xSemaphoreGive(missionSync);
+
     nwstatusMutex = xSemaphoreCreateMutex();
     mainstatusMutex = xSemaphoreCreateMutex ();
     storageMapMutex = xSemaphoreCreateMutex ();

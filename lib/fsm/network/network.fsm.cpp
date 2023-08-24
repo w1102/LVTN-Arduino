@@ -57,14 +57,10 @@ class NwState_initialize : public NetworkManager
     void
     entry () override
     {
-        /* network status queue init */
-        const uint nwstatusMaxStoredItems = 5;
-        nwstatusQueue = xQueueCreate (nwstatusMaxStoredItems, sizeof (NwStatus));
+        nwstatusQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (NwStatus));
+        xSemaphoreTake (missionSync, portMAX_DELAY);
 
         /* mqtt init */
-        /* NW_MQTT_HOST, NW_MQTT_PORT, ... must be read from EEPROM */
-        /* and it can be configurable by user by webserver or smartconfig(esptouch-v2) */
-        /* but not implemented yet */
         MQTT.setServer (NW_MQTT_HOST, NW_MQTT_PORT);
         MQTT.setCredentials (NW_MQTT_USERNAME, NW_MQTT_PASSWORD);
 
@@ -96,15 +92,13 @@ class NwState_connectWiFi : public NetworkManager
     void
     entry () override
     {
-        Serial.println ("connect wifi");
-
         putNwStatus (nwstatus_wifi_not_found);
         eepromReadWifiCredentials (ssid, pswd);
-        timerInit (onTimeout);
 
         WiFi.mode (WIFI_STA);
         WiFi.begin (ssid.c_str (), pswd.c_str ());
 
+        timerInit (onTimeout);
         timerStart ();
     }
 
@@ -144,7 +138,7 @@ class NwState_connectWiFi : public NetworkManager
 
   private:
     String ssid, pswd;
-    uint connectionAttempts = 0;
+    uint connectionAttempts;
 };
 
 // ----------------------------------------------------------------------------
@@ -271,24 +265,26 @@ class NwState_subscribeMqtt : public NetworkManager
     {
         fullPayload += String (e.payload, e.len);
 
-        if (e.index + e.len == e.total)
+        if (e.index + e.len != e.total)
         {
-            xSemaphoreTake (storageMapMutex, portMAX_DELAY);
-            bool isValidMap = storageMap.parseMapMsg (fullPayload);
-            xSemaphoreGive (storageMapMutex);
-
-            if (isValidMap)
-            {
-                isMapRetained = true;
-                transitWhenRetained ();
-            }
-
-            fullPayload = "";
+            return;
         }
+
+        xSemaphoreTake (storageMapMutex, portMAX_DELAY);
+        bool isValidMap = storageMap.parseMapMsg (fullPayload);
+        xSemaphoreGive (storageMapMutex);
+
+        if (isValidMap)
+        {
+            isMapRetained = true;
+            transitWhenRetained ();
+        }
+
+        fullPayload = "";
     }
 
     void
-    react (nwevent_mqtt_retain_location const &e) override
+    react (nwevent_mqtt_retain_lineCount const &e) override
     {
         locationPayload = String (e.payload, e.len);
 
@@ -352,12 +348,8 @@ class NwState_subscribeMqtt : public NetworkManager
     void
     subscription ()
     {
-        /* mqtt subscription */
-        /* NW_MQTT_TOPICNAME_BOTLOCATION, NW_MQTT_TOPIC_QOS, ... must be read from EEPROM */
-        /* and it can be configurable by user by webserver or smartconfig(esptouch-v2) */
-        /* but not implemented yet */
-        MQTT.subscribe (NW_MQTT_TOPICNAME_BOTLOCATION, NW_MQTT_TOPIC_QOS);
         MQTT.subscribe (NW_MQTT_TOPICNAME_MAP, NW_MQTT_TOPIC_QOS);
+        MQTT.subscribe (NW_MQTT_TOPICNAME_BOTLOCATION, NW_MQTT_TOPIC_QOS);
         MQTT.subscribe (NW_MQTT_TOPICNAME_MISSION, NW_MQTT_TOPIC_QOS);
     }
 };
@@ -397,6 +389,7 @@ class NwState_idle : public NetworkManager
 
         if (isMissionValid)
         {
+            xSemaphoreGive (missionSync);
             transit<NwState_tracking> ();
         }
     }
@@ -556,7 +549,7 @@ nwStatusLoop ()
     {
         return;
     }
-  
+
     xSemaphoreTake (nwstatusMutex, portMAX_DELAY);
     nwstatus = currentStatus;
     xSemaphoreGive (nwstatusMutex);
@@ -660,7 +653,7 @@ onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties prop
     /* handle retain location */
     if (strcmp (NW_MQTT_TOPICNAME_BOTLOCATION, topic) == 0)
     {
-        sendNwEvent (nwevent_mqtt_retain_location { retainEvent });
+        sendNwEvent (nwevent_mqtt_retain_lineCount { retainEvent });
         return;
     }
 }

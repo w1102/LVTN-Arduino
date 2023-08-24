@@ -131,7 +131,7 @@ class MainState_idle : public MainManager
     void
     entry () override
     {
-        timerInit (onInterval, pdMS_TO_TICKS (100), true);
+        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), false);
         timerStart ();
     }
 
@@ -144,10 +144,11 @@ class MainState_idle : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        if (!isMissionRecevied ())
-        {
-            return;
-        }
+        Serial.println("start wait mission");
+
+        xSemaphoreTake(missionSync, portMAX_DELAY);
+
+        Serial.println("recived mission");
 
         taskingMission ();
     }
@@ -193,7 +194,7 @@ class MainState_idle : public MainManager
             targetLineCount = mission.getLineCount ();
         }
 
-        Serial.printf("target: %d\n\n", targetLineCount);
+        Serial.printf ("target: %d\n\n", targetLineCount);
 
         putMainStatus (MainStatus::mainstatus_runMission);
         transit<MainState_move> ();
