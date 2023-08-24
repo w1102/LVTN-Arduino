@@ -21,6 +21,8 @@ extern Mission mission;
 extern xSemaphoreHandle missionMutex;
 
 extern QueueHandle_t currentLineCountQueue;
+extern QueueHandle_t missionStatusQueue;
+
 extern xSemaphoreHandle missionSync;
 
 #endif // GLOBAL_EXTERN_H_

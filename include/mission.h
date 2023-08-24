@@ -3,7 +3,6 @@
 
 #include "types.h"
 #include <Arduino.h>
-#include <cppQueue.h>
 
 #define MISSION_TYPE_KEY "type"
 #define MISSION_LINECOUNT_KEY "lineCount"
@@ -12,26 +11,16 @@ class Mission
 {
   public:
     Mission();
-    bool parseMission(String missionStr);
+    bool parseMissionMsg(String missionStr);
 
     String missionStatus2Str(MissionStatus status);
 
-    void putStatus(MissionStatus status);
-    MissionStatus popStatus();
-    MissionStatus getLastStatus();
-    bool isStatusQueueEmpty();
-
-    int getLineCount();
+    int getTargetLineCount();
     MissionType getType();
-
-    void clean();
 
   private:
     MissionType type;
-    int lineCount;
-    MissionStatus lastStatus;
-
-    void printInvalid();
+    int targetLineCount;
 };
 
 #endif // MISSION_H_

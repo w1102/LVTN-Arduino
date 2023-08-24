@@ -21,8 +21,7 @@ Mission mission;
 xSemaphoreHandle missionMutex;
 
 QueueHandle_t currentLineCountQueue;
-
-
+QueueHandle_t missionStatusQueue;
 
 xSemaphoreHandle missionSync = nullptr;
 
@@ -36,7 +35,9 @@ initMutex ()
     mainstatusMutex = xSemaphoreCreateMutex ();
     storageMapMutex = xSemaphoreCreateMutex ();
     missionMutex = xSemaphoreCreateMutex ();
+    
     currentLineCountQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
+    missionStatusQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionStatus));
 }
 
 #endif // GLOBAL_H_

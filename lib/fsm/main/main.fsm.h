@@ -16,6 +16,7 @@ Implementing a state machine to manage main actions:
 #include "makerline.h"
 #include "network.fsm.h"
 #include "tinyfsm.hpp"
+#include "trigger.h"
 #include "types.h"
 #include <Arduino.h>
 #include <cppQueue.h>

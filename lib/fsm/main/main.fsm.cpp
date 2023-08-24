@@ -17,7 +17,6 @@ QueueHandle_t mainstatusQueue;
 
 /* state declarations */
 class MainState_initialize;
-class MainState_waitNetwork;
 class MainState_idle;
 class MainState_move;
 class MainState_bypass;
@@ -43,81 +42,15 @@ class MainState_initialize : public MainManager
     void
     entry () override
     {
-        targetLineCount = 0;
-        currentLineCount = 0;
-        itemPicked = false;
-        homing = false;
-
-        lhsMotor = new L298N (M1_EN, M1_PA, M1_PB);
-        rhsMotor = new L298N (M2_EN, M2_PA, M2_PB);
-
-        makerLine = new MakerLine (
-            SENSOR_1,
-            SENSOR_2,
-            SENSOR_3,
-            SENSOR_4,
-            SENSOR_5);
-
         mainstatusQueue = xQueueCreate (CONF_MAINFSM_QUEUE_LENGTH, sizeof (MainStatus));
 
-        transit<MainState_waitNetwork> ();
-    }
-};
-
-// ----------------------------------------------------------------------------
-// State: MainState_waitNetwork
-//
-
-class MainState_waitNetwork : public MainManager
-{
-    void
-    entry () override
-    {
-        timerInit (onInterval, pdMS_TO_TICKS (100), true);
-        timerStart ();
-    }
-
-    void
-    exit () override
-    {
-        timerDelete ();
-    }
-
-    void
-    react (mainevent_interval const &) override
-    {
-        if (isCurrentLineCountQueueEmpty ())
-        {
-            return;
-        }
-
-        transit<MainState_idle> (transitAction, isNwStatusGood);
-    }
-
-  private:
-    static void
-    transitAction ()
-    {
-        putMainStatus (MainStatus::mainstatus_idle);
-        xQueueReceive (currentLineCountQueue, &currentLineCount, portMAX_DELAY);
-    }
-
-    static bool
-    isNwStatusGood ()
-    {
-        NwStatus _nwstatus;
-
-        xSemaphoreTake (nwstatusMutex, portMAX_DELAY);
-        _nwstatus = nwstatus;
-        xSemaphoreGive (nwstatusMutex);
-
-        return _nwstatus == NwStatus::nwstatus_good;
-    }
-
-    bool
-    isCurrentLineCountQueueEmpty ()
-    {
-        return uxQueueMessagesWaiting (currentLineCountQueue) == 0;
+        trigger ("MainState_initialize_Trigger",
+                 [=] ()
+                 {
+                     xQueueReceive (currentLineCountQueue, &currentLineCount, portMAX_DELAY);
+                     putMainStatus (mainstatus_idle);
+                     transit<MainState_idle> ();
+                 });
     }
 };
 
@@ -131,54 +64,30 @@ class MainState_idle : public MainManager
     void
     entry () override
     {
-        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), false);
-        timerStart ();
-    }
+        trigger ("MainState_idle_trigger",
+                 [=] ()
+                 {
+                     xSemaphoreTake (missionSync, portMAX_DELAY);
+                     transit<MainState_move> (
+                         [=] ()
+                         {
+                             taskingMission ();
+                             xSemaphoreGive (missionSync);
 
-    void
-    exit () override
-    {
-        timerDelete ();
-    }
+                             MissionStatus running = missionstatus_running;
+                             xQueueSend (missionStatusQueue, &running, portMAX_DELAY);
 
-    void
-    react (mainevent_interval const &) override
-    {
-        Serial.println("start wait mission");
-
-        xSemaphoreTake(missionSync, portMAX_DELAY);
-
-        Serial.println("recived mission");
-
-        taskingMission ();
+                             putMainStatus (mainstatus_runMission);
+                         });
+                 });
     }
 
   private:
-    bool
-    isMissionRecevied ()
-    {
-        MissionStatus missionStatus;
-
-        xSemaphoreTake (missionMutex, portMAX_DELAY);
-        missionStatus = mission.getLastStatus ();
-        xSemaphoreGive (missionMutex);
-
-        return missionStatus == MissionStatus::missionstatus_taking;
-    }
-
     void
     taskingMission ()
     {
-        MissionType missionType;
-
-        xSemaphoreTake (missionMutex, portMAX_DELAY);
-        missionType = mission.getType ();
-        mission.putStatus (MissionStatus::missionstatus_running);
-        xSemaphoreGive (missionMutex);
-
-        if (missionType == MissionType::importMission)
+        if (mission.getType () == importMission)
         {
-            Serial.print ("export     ");
             xSemaphoreTake (storageMapMutex, portMAX_DELAY);
             targetLineCount = storageMap.getImportLineCount ();
             xSemaphoreGive (storageMapMutex);
@@ -190,14 +99,8 @@ class MainState_idle : public MainManager
         }
         else
         {
-            Serial.print ("import     ");
-            targetLineCount = mission.getLineCount ();
+            targetLineCount = mission.getTargetLineCount ();
         }
-
-        Serial.printf ("target: %d\n\n", targetLineCount);
-
-        putMainStatus (MainStatus::mainstatus_runMission);
-        transit<MainState_move> ();
     }
 };
 
@@ -394,7 +297,7 @@ class MainState_move : public MainManager
             pushAct (MainActType::mainact_turnBack, true);
 
             xSemaphoreTake (missionMutex, portMAX_DELAY);
-            targetLineCount = mission.getLineCount ();
+            targetLineCount = mission.getTargetLineCount ();
             xSemaphoreGive (missionMutex);
         }
 
@@ -643,9 +546,8 @@ class MainState_done : public MainManager
         currentLineCount = storageMap.getHomeLinecount ();
         xSemaphoreGive (storageMapMutex);
 
-        xSemaphoreTake (missionMutex, portMAX_DELAY);
-        mission.putStatus (MissionStatus::missionstatus_done);
-        xSemaphoreGive (missionMutex);
+        MissionStatus done = missionstatus_done;
+        xQueueSend (missionStatusQueue, &done, portMAX_DELAY);
 
         putMainStatus (MainStatus::mainstatus_idle);
         transit<MainState_idle> ();
@@ -660,15 +562,21 @@ MainManager::MainManager () {}
 
 MainManager::~MainManager () {}
 
-int MainManager::targetLineCount;
-int MainManager::currentLineCount;
-bool MainManager::itemPicked;
-bool MainManager::homing;
+int MainManager::targetLineCount = 0;
+int MainManager::currentLineCount = 0;
+bool MainManager::itemPicked = false;
+bool MainManager::homing = false;
+
 cppQueue MainManager::actQueue (sizeof (MainAct), 10);
 
-L298N *MainManager::lhsMotor;
-L298N *MainManager::rhsMotor;
-MakerLine *MainManager::makerLine;
+L298N *MainManager::lhsMotor = new L298N (M1_EN, M1_PA, M1_PB);
+L298N *MainManager::rhsMotor = new L298N (M2_EN, M2_PA, M2_PB);
+MakerLine *MainManager::makerLine = new MakerLine (
+    SENSOR_1,
+    SENSOR_2,
+    SENSOR_3,
+    SENSOR_4,
+    SENSOR_5);
 
 void
 MainManager::pushAct (MainActType act, bool forceExcu)

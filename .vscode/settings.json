@@ -1,5 +1,13 @@
 {
     "files.exclude": {
         "lib/sm_*": true
+    },
+    "files.associations": {
+        "*.css": "tailwindcss",
+        "*.scss": "tailwindcss",
+        "new": "cpp",
+        "array": "cpp",
+        "string": "cpp",
+        "string_view": "cpp"
     }
 }

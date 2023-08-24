@@ -25,6 +25,7 @@ Link: https://github.com/marvinroger/async-mqtt-client
 #define NW_MQTT_TOPICNAME_MISSION "quang/logistics/mission"
 
 #include "eepromrw.h"
+#include "gpio.h"
 #include "helper.h"
 #include "main.fsm.h"
 #include "tinyfsm.hpp"
@@ -43,23 +44,18 @@ struct nwevent_wifi_connected : nwevent {};
 struct nwevent_wifi_disconnected : nwevent {};
 
 struct nwevent_sc_done : nwevent {};
-struct nwevent_sc_got_credentials: nwevent 
-{
-    char ssid[32];
-    char pswd[32];
-};
 
 struct nwevent_mqtt_connected: nwevent {};
 struct nwevent_mqtt_disconnected: nwevent {};
 
-struct nwevent_mqtt_retain: nwevent {
+struct nwevent_mqtt_msg: nwevent {
     char *payload;
     size_t len, index, total;  
 };
 
-struct nwevent_mqtt_retain_map: nwevent_mqtt_retain {};
-struct nwevent_mqtt_retain_lineCount: nwevent_mqtt_retain {};
-struct nwevent_mqtt_take_mission: nwevent_mqtt_retain {};
+struct nwevent_mqtt_msg_map: nwevent_mqtt_msg {};
+struct nwevent_mqtt_msg_lineCount: nwevent_mqtt_msg {};
+struct nwevent_mqtt_take_mission: nwevent_mqtt_msg {};
 
 
 // ----------------------------------------------------------------------------
@@ -70,41 +66,41 @@ struct nwevent_mqtt_take_mission: nwevent_mqtt_retain {};
 class NetworkManager : public tinyfsm::Fsm<NetworkManager>
 {
   public:
-    NetworkManager() : _timer {nullptr} {};
+    NetworkManager () : _timer { nullptr } {};
 
     /* default reaction for unhandled events */
-    void react(tinyfsm::Event const &) {};
+    void react (tinyfsm::Event const &) {};
 
     /* default reaction for nwevent_wifi_disconnected events */
-    virtual void react(nwevent_wifi_disconnected const &);
+    virtual void react (nwevent_wifi_disconnected const &);
 
     /* react events in some states */
-    virtual void react(nwevent_timeout const &) {};
-    virtual void react(nwevent_wifi_connected const &) {};
-    virtual void react(nwevent_sc_got_credentials const &) {};
-    virtual void react(nwevent_sc_done const &) {};
-    virtual void react(nwevent_mqtt_disconnected const &) {};
-    virtual void react(nwevent_mqtt_connected const &) {};
-    virtual void react(nwevent_mqtt_retain_map const &) {};
-    virtual void react(nwevent_mqtt_retain_lineCount const &) {};
-    virtual void react(nwevent_mqtt_take_mission const &) {};
+    virtual void react (nwevent_timeout const &) {};
+    virtual void react (nwevent_wifi_connected const &) {};
+    // virtual void react(nwevent_sc_got_credentials const &) {};
+    virtual void react (nwevent_sc_done const &) {};
+    virtual void react (nwevent_mqtt_disconnected const &) {};
+    virtual void react (nwevent_mqtt_connected const &) {};
+    virtual void react (nwevent_mqtt_msg_map const &) {};
+    virtual void react (nwevent_mqtt_msg_lineCount const &) {};
+    virtual void react (nwevent_mqtt_take_mission const &) {};
 
     /* entry actions in some states */
-    virtual void entry(void) {};
+    virtual void entry (void) {};
 
     /* exit actions in some states */
-    virtual void exit(void) {};
+    virtual void exit (void) {};
 
   private:
     TimerHandle_t _timer;
 
   protected:
-    void timerInit(
+    void timerInit (
         TimerCallbackFunction_t cb,
-        TickType_t period = pdMS_TO_TICKS(NW_CONNECTION_TIMEOUT_IN_MS));
-    void timerStart();
-    void timerStop();
-    void timerDelete();
+        TickType_t period = pdMS_TO_TICKS (NW_CONNECTION_TIMEOUT_IN_MS));
+    void timerStart ();
+    void timerStop ();
+    void timerDelete ();
 };
 
 using NetworkManagerFSM = tinyfsm::Fsm<NetworkManager>;
@@ -115,12 +111,13 @@ using NetworkManagerFSM = tinyfsm::Fsm<NetworkManager>;
 
 /* send a network event into NetworkManager state machine */
 template <typename E>
-void sendNwEvent(E const &event)
+void
+sendNwEvent (E const &event)
 {
-    NetworkManagerFSM::dispatch<E>(event);
+    NetworkManagerFSM::dispatch<E> (event);
 }
 
 /* polling this function to perform network status update */
-void nwStatusLoop();
+void nwStatusLoop ();
 
 #endif // NETWORK_FSM_H_

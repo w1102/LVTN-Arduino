@@ -12,7 +12,7 @@ void setup()
 
     initMutex();
     eepromInit();
-    // eepromClean();
+    //eepromClean();
 
     xTaskCreatePinnedToCore(
         networkTask,            // Function that should be called
