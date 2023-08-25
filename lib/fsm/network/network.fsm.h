@@ -55,7 +55,7 @@ struct nwevent_mqtt_msg: nwevent {
 
 struct nwevent_mqtt_msg_map: nwevent_mqtt_msg {};
 struct nwevent_mqtt_msg_lineCount: nwevent_mqtt_msg {};
-struct nwevent_mqtt_take_mission: nwevent_mqtt_msg {};
+struct nwevent_mqtt_msg_mission: nwevent_mqtt_msg {};
 
 
 // ----------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class NetworkManager : public tinyfsm::Fsm<NetworkManager>
     virtual void react (nwevent_mqtt_connected const &) {};
     virtual void react (nwevent_mqtt_msg_map const &) {};
     virtual void react (nwevent_mqtt_msg_lineCount const &) {};
-    virtual void react (nwevent_mqtt_take_mission const &) {};
+    virtual void react (nwevent_mqtt_msg_mission const &) {};
 
     /* entry actions in some states */
     virtual void entry (void) {};

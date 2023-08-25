@@ -1,26 +1,14 @@
 #ifndef MISSION_H_
 #define MISSION_H_
 
+
+#include "config.h"
+#include "cppQueue.h"
 #include "types.h"
 #include <Arduino.h>
 
-#define MISSION_TYPE_KEY "type"
-#define MISSION_LINECOUNT_KEY "lineCount"
+void parseMissionAction (cppQueue &actionQueue, String* actionStr);
 
-class Mission
-{
-  public:
-    Mission();
-    bool parseMissionMsg(String missionStr);
-
-    String missionStatus2Str(MissionStatus status);
-
-    int getTargetLineCount();
-    MissionType getType();
-
-  private:
-    MissionType type;
-    int targetLineCount;
-};
+bool parseMissionMsg (MissionData &mission, String missionStr);
 
 #endif // MISSION_H_

@@ -69,9 +69,11 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     static bool itemPicked;
     static bool homing;
     static cppQueue actQueue;
+    static MissionData mission;
+    static MissionPhase currentPhase;
 
-    void pushAct (MainActType act, bool forceExcu = false);
-    MainAct popAct ();
+    static void pushAct (ActType act, bool forceExcu = false);
+    static ActData popAct ();
 
     void timerInit (TimerCallbackFunction_t, TickType_t, UBaseType_t autoReaload = false);
     void timerStart ();

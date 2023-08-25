@@ -64,43 +64,67 @@ class MainState_idle : public MainManager
     void
     entry () override
     {
-        trigger ("MainState_idle_trigger",
-                 [=] ()
-                 {
-                     xSemaphoreTake (missionSync, portMAX_DELAY);
-                     transit<MainState_move> (
-                         [=] ()
-                         {
-                             taskingMission ();
-                             xSemaphoreGive (missionSync);
+        timerInit (onInterval, pdMS_TO_TICKS (100), true);
+        timerStart ();
+    }
 
-                             MissionStatus running = missionstatus_running;
-                             xQueueSend (missionStatusQueue, &running, portMAX_DELAY);
+    void
+    exit () override
+    {
+        timerDelete ();
+    }
 
-                             putMainStatus (mainstatus_runMission);
-                         });
-                 });
+    void
+    react (mainevent_interval const &) override
+    {
+        transit<MainState_move> (
+            [=] () {
+                
+            },
+            [=] () -> bool
+            {
+                return taskingMissionIfAvailable () || returnHomeIfAvailable ();
+            });
     }
 
   private:
-    void
-    taskingMission ()
+    bool
+    taskingMissionIfAvailable ()
     {
-        if (mission.getType () == importMission)
+        if (xQueueReceive (missionQueue, &mission, 0) == pdTRUE)
         {
-            xSemaphoreTake (storageMapMutex, portMAX_DELAY);
-            targetLineCount = storageMap.getImportLineCount ();
-            xSemaphoreGive (storageMapMutex);
-
-            if (targetLineCount < currentLineCount)
+            if (currentLineCount > targetLineCount)
             {
-                pushAct (MainActType::mainact_turnBack, true);
+                pushAct (act_turnBack, true);
             }
+
+            currentPhase = phase1;
+            parseMissionAction (actQueue, mission.phase1.action);
+
+            return true;
         }
-        else
+
+        return false;
+    }
+
+    bool
+    returnHomeIfAvailable ()
+    {
+        xSemaphoreTake (storageMapMutex, portMAX_DELAY);
+        int homeLineCount = storageMap.getHomeLinecount ();
+        xSemaphoreGive (storageMapMutex);
+
+        if (homeLineCount != currentLineCount)
         {
-            targetLineCount = mission.getTargetLineCount ();
+            targetLineCount = homeLineCount - 1;
+            pushAct (act_turnBack);
+            pushAct (act_bypass);
+            pushAct (act_doneMission, true);
+
+            return true;
         }
+
+        return false;
     }
 };
 
@@ -139,7 +163,7 @@ class MainState_move : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        MainAct act;
+        ActData act;
         if (actQueue.peek (&act) && act.forceExcu)
         {
             sendMainEvent (mainevent_dispatch_act {});
@@ -161,26 +185,26 @@ class MainState_move : public MainManager
     void
     react (mainevent_dispatch_act const &) override
     {
-        MainAct act = popAct ();
+        ActData act = popAct ();
 
         switch (act.type)
         {
-        case MainActType::mainact_turnLeft:
+        case ActType::act_turnLeft:
             transit<MainState_turnLeft> ();
             break;
-        case MainActType::mainact_turnRight:
+        case ActType::act_turnRight:
             transit<MainState_turnRight> ();
             break;
-        case MainActType::mainact_turnBack:
+        case ActType::act_turnBack:
             transit<MainState_turnBack> ();
             break;
-        case MainActType::mainact_bypass:
+        case ActType::act_bypass:
             transit<MainState_bypass> ();
             break;
-        case MainActType::mainact_io:
+        case ActType::act_io:
             transit<MainState_io> ();
             break;
-        case MainActType::mainact_doneMission:
+        case ActType::act_doneMission:
             transit<MainState_done> ();
             break;
         }
@@ -240,21 +264,21 @@ class MainState_move : public MainManager
     {
         MissionType missionType;
 
-        xSemaphoreTake (missionMutex, portMAX_DELAY);
-        missionType = mission.getType ();
-        xSemaphoreGive (missionMutex);
+        // xSemaphoreTake (missionMutex, portMAX_DELAY);
+        // missionType = mission.getType ();
+        // xSemaphoreGive (missionMutex);
 
         if (homing)
         {
-            pushAct (MainActType::mainact_turnBack);
-            pushAct (MainActType::mainact_bypass);
-            pushAct (MainActType::mainact_doneMission, true);
+            // pushAct (MainActType::act_turnBack);
+            // pushAct (MainActType::act_bypass);
+            // pushAct (MainActType::act_doneMission, true);
         }
         else if (missionType == MissionType::exportMission && itemPicked)
         {
 
-            pushAct (MainActType::mainact_io);
-            pushAct (MainActType::mainact_turnBack, true);
+            // pushAct (MainActType::act_io);
+            // pushAct (MainActType::act_turnBack, true);
 
             // for homing
             homing = true;
@@ -265,12 +289,12 @@ class MainState_move : public MainManager
         }
         else if (missionType == MissionType::exportMission)
         {
-            pushAct (MainActType::mainact_bypass);
-            pushAct (MainActType::mainact_turnLeft, true);
-            pushAct (MainActType::mainact_io);
-            pushAct (MainActType::mainact_turnBack, true);
-            pushAct (MainActType::mainact_bypass);
-            pushAct (MainActType::mainact_turnLeft, true);
+            // pushAct (MainActType::act_bypass);
+            // pushAct (MainActType::act_turnLeft, true);
+            // pushAct (MainActType::act_io);
+            // pushAct (MainActType::act_turnBack, true);
+            // pushAct (MainActType::act_bypass);
+            // pushAct (MainActType::act_turnLeft, true);
 
             xSemaphoreTake (storageMapMutex, portMAX_DELAY);
             targetLineCount = storageMap.getExportLineCount ();
@@ -278,12 +302,12 @@ class MainState_move : public MainManager
         }
         else if (missionType == MissionType::importMission && itemPicked)
         {
-            pushAct (MainActType::mainact_bypass);
-            pushAct (MainActType::mainact_turnLeft, true);
-            pushAct (MainActType::mainact_io);
-            pushAct (MainActType::mainact_turnBack, true);
-            pushAct (MainActType::mainact_bypass);
-            pushAct (MainActType::mainact_turnRight, true);
+            // pushAct (MainActType::act_bypass);
+            // pushAct (MainActType::act_turnLeft, true);
+            // pushAct (MainActType::act_io);
+            // pushAct (MainActType::act_turnBack, true);
+            // pushAct (MainActType::act_bypass);
+            // pushAct (MainActType::act_turnRight, true);
 
             homing = true;
 
@@ -293,12 +317,12 @@ class MainState_move : public MainManager
         }
         else if (missionType == MissionType::importMission)
         {
-            pushAct (MainActType::mainact_io);
-            pushAct (MainActType::mainact_turnBack, true);
+            // pushAct (MainActType::act_io);
+            // pushAct (MainActType::act_turnBack, true);
 
-            xSemaphoreTake (missionMutex, portMAX_DELAY);
-            targetLineCount = mission.getTargetLineCount ();
-            xSemaphoreGive (missionMutex);
+            // xSemaphoreTake (missionMutex, portMAX_DELAY);
+            // targetLineCount = mission.getTargetLineCount ();
+            // xSemaphoreGive (missionMutex);
         }
 
         sendMainEvent (mainevent_dispatch_act {});
@@ -566,8 +590,9 @@ int MainManager::targetLineCount = 0;
 int MainManager::currentLineCount = 0;
 bool MainManager::itemPicked = false;
 bool MainManager::homing = false;
-
-cppQueue MainManager::actQueue (sizeof (MainAct), 10);
+MissionData MainManager::mission;
+MissionPhase MainManager::currentPhase;
+cppQueue MainManager::actQueue (sizeof (ActData), 20);
 
 L298N *MainManager::lhsMotor = new L298N (M1_EN, M1_PA, M1_PB);
 L298N *MainManager::rhsMotor = new L298N (M2_EN, M2_PA, M2_PB);
@@ -579,19 +604,19 @@ MakerLine *MainManager::makerLine = new MakerLine (
     SENSOR_5);
 
 void
-MainManager::pushAct (MainActType act, bool forceExcu)
+MainManager::pushAct (ActType act, bool forceExcu)
 {
-    MainAct _act;
+    ActData _act;
     _act.type = act;
     _act.forceExcu = forceExcu;
 
     actQueue.push (&_act);
 }
 
-MainAct
+ActData
 MainManager::popAct ()
 {
-    MainAct act;
+    ActData act;
     actQueue.pop (&act);
     return act;
 }

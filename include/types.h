@@ -2,6 +2,7 @@
 #define TYPES_H_
 
 #include <Arduino.h>
+#include "cppQueue.h"
 
 typedef enum
 {
@@ -22,20 +23,20 @@ typedef enum
 
 typedef enum
 {
-    mainact_none,
-    mainact_turnLeft,
-    mainact_turnRight,
-    mainact_turnBack,
-    mainact_bypass,
-    mainact_io,
-    mainact_doneMission
-} MainActType;
+    act_none,
+    act_turnLeft,
+    act_turnRight,
+    act_turnBack,
+    act_bypass,
+    act_io,
+    act_doneMission
+} ActType;
 
 typedef struct
 {
-    MainActType type;
+    ActType type;
     bool forceExcu;
-} MainAct;
+} ActData;
 
 typedef enum
 {
@@ -50,6 +51,23 @@ typedef enum
     importMission,
     exportMission
 } MissionType;
+
+
+typedef enum {
+    phase1,
+    phase2
+} MissionPhase;
+
+
+typedef struct {
+    int target;
+    String *action;
+} MissionPhaseData;
+
+typedef struct {
+    MissionPhaseData phase1;
+    MissionPhaseData phase2;
+} MissionData;
 
 typedef struct
 {

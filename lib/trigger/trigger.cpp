@@ -26,12 +26,12 @@ trigger (const char *triggerName, triggerCallback callback, TickType_t triggerAf
     data->callback = callback;
 
     xTaskCreatePinnedToCore (
-        triggerTask,              // Function that should be called
-        triggerName,              // Name of the task (for debugging)
-        configMINIMAL_STACK_SIZE, // Stack size (bytes)
-        data,                     // Parameter to pass
-        1,                        // Task priority
-        NULL,                     // Task handle
-        1                         // Run on core
+        triggerTask, // Function that should be called
+        triggerName, // Name of the task (for debugging)
+        2000,        // Stack size (bytes)
+        data,        // Parameter to pass
+        1,           // Task priority
+        NULL,        // Task handle
+        1            // Run on core
     );
 }

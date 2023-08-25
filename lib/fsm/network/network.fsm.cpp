@@ -3,25 +3,17 @@
 #include "WiFi.h"
 #include "global.extern.h"
 /*
-Implementing a state machine to manage WiFi and MQTT connections
-
-Using the `TinyFSM` library to implement a Mealy state machine
-Link: https://github.com/digint/tinyfsm
-
-Using the `Async MQTT` library to implement an asynchronous MQTT client
-Link: https://github.com/marvinroger/async-mqtt-client
-*/
 
 // ----------------------------------------------------------------------------
 // prototype declarations
 // clang-format off
-// 
+//
 
 /* global variable declarations */
 AsyncMqttClient MQTT;
 QueueHandle_t nwstatusQueue;
 
-/* state declarations */
+/* forward state declarations */
 class NwState_initialize;
 class NwState_connectWiFi;
 class NwState_configWiFi;
@@ -31,25 +23,24 @@ class NwState_idle;
 class NwState_tracking;
 class NwState_error;
 
-
 /* callback declarations */
-void onTimeout(TimerHandle_t xTimer);
-void onWiFiEvent(WiFiEvent_t event, arduino_event_info_t eventInfo);
-void onMqttConnect(bool sessionPresent);
-void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
-void onMqttSubscribe(uint16_t packetId, uint8_t qos);
-void onMqttPublish(uint16_t packetId);
-void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total);
+void onTimeout (TimerHandle_t xTimer);
+void onWiFiEvent (WiFiEvent_t event, arduino_event_info_t eventInfo);
+void onMqttConnect (bool sessionPresent);
+void onMqttDisconnect (AsyncMqttClientDisconnectReason reason);
+void onMqttSubscribe (uint16_t packetId, uint8_t qos);
+void onMqttPublish (uint16_t packetId);
+void onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total);
 
 /* helper declarations */
 
 /* put network status into queue */
-inline void putNwStatus(NwStatus status);
+inline void putNwStatus (NwStatus status);
 
 // ----------------------------------------------------------------------------
 // State: NwState_initialize
 // clang-format on
-// initialize WiFi, MQTT and switch to NwState_connectWiFi
+//
 
 class NwState_initialize : public NetworkManager
 {
@@ -81,9 +72,6 @@ class NwState_initialize : public NetworkManager
 // ----------------------------------------------------------------------------
 // State: NwState_connectWiFi
 //
-// Perform WiFi connection, will attempt to connect 3 times with 3-second interval each time
-// If the connection is successful, switch to NwState_connectMqtt
-// If failed to connect for more than 3 attempts, switch to NwState_configWiFi
 
 class NwState_connectWiFi : public NetworkManager
 {
@@ -116,9 +104,12 @@ class NwState_connectWiFi : public NetworkManager
         }
         else
         {
-            Serial.println ("config wifi");
-            putNwStatus (nwstatus_wifi_config);
-            transit<NwState_configWiFi> ();
+            transit<NwState_configWiFi> (
+                [=]
+                {
+                    Serial.println ("config wifi");
+                    putNwStatus (nwstatus_wifi_config);
+                });
         }
     }
 
@@ -138,10 +129,6 @@ class NwState_connectWiFi : public NetworkManager
 // ----------------------------------------------------------------------------
 // State: NwState_configWiFi
 //
-// Perform smartconfig
-// When the cellphone sends login information, it will be saved to EEPROM
-// When successfully connected to WiFi based on the information above, switch to NwState_connectMqtt
-// In the future, need to implement additional functionality to restart smartconfig when failed to connect with the login information above
 
 class NwState_configWiFi : public NetworkManager
 {
@@ -168,9 +155,6 @@ class NwState_configWiFi : public NetworkManager
 // ----------------------------------------------------------------------------
 // State: NwState_connectMqtt
 //
-// Perform MQTT connection, will attempt to connect 3 times with 3-second interval each time
-// If the connection is successful, switch to NwState_subscribeMqtt
-// If failed to connect for more than 3 attempts, switch to NwState_error
 
 class NwState_connectMqtt : public NetworkManager
 {
@@ -226,9 +210,6 @@ class NwState_connectMqtt : public NetworkManager
 // ----------------------------------------------------------------------------
 // State: NwState_subscribeMqtt
 //
-// Perform MQTT topic subscription
-// If subscription is successful, switch to NwState_idle
-// Note: Currently, if subscribinga non-existent topic, it also switches to NwState_idle. This needs to be reconsidered in the future.
 
 class NwState_subscribeMqtt : public NetworkManager
 {
@@ -344,7 +325,6 @@ class NwState_subscribeMqtt : public NetworkManager
 // ----------------------------------------------------------------------------
 // State: NwState_idle
 //
-// Idle state, when all states have been completed
 
 class NwState_idle : public NetworkManager
 {
@@ -365,26 +345,33 @@ class NwState_idle : public NetworkManager
     {
         String payload = String (e.payload, e.len);
 
-        xSemaphoreTake (missionMutex, portMAX_DELAY);
-        bool isMissionValid = mission.parseMissionMsg (payload);
-        xSemaphoreGive (missionMutex);
+        MissionData mission;
+        if (parseMissionMsg (mission, payload))
+        {
+            xQueueSend (missionQueue, &mission, 0);
+        }
 
-        transit<NwState_tracking> (
-            [=] ()
-            {
-                xSemaphoreGive (missionSync);
+        // xSemaphoreTake (missionMutex, portMAX_DELAY);
+        // bool isMissionValid = mission.parseMissionMsg (payload);
+        // xSemaphoreGive (missionMutex);
 
-                MissionStatus tasking = missionstatus_taking;
-                xQueueSend (missionStatusQueue, &tasking, portMAX_DELAY);
-            },
-            [=] () -> bool
-            { return isMissionValid; });
+        // transit<NwState_tracking> (
+        //     [=] ()
+        //     {
+        //         xSemaphoreGive (missionSync);
+
+        //         MissionStatus tasking = missionstatus_taking;
+        //         xQueueSend (missionStatusQueue, &tasking, portMAX_DELAY);
+        //     },
+        //     [=] () -> bool
+        //     { return isMissionValid; });
     }
 };
 
 // ----------------------------------------------------------------------------
 // State: NwState_tracking
 //
+
 class NwState_tracking : public NetworkManager
 {
   public:
@@ -410,8 +397,7 @@ class NwState_tracking : public NetworkManager
 
         if (xQueueReceive (missionStatusQueue, &missionStatus, 0) == pdTRUE)
         {
-            transit<NwState_idle> ([=] ()
-                                   {},
+            transit<NwState_idle> ([=] () {},
                                    [=] () -> bool
                                    { return missionStatus == missionstatus_done; });
         }
@@ -424,16 +410,15 @@ class NwState_tracking : public NetworkManager
     void
     react (nwevent_mqtt_disconnected const &) override
     {
-        transit<NwState_connectMqtt> ();
+        transit<NwState_connectMqtt> (
+            [=] ()
+            { putNwStatus (nwstatus_mqtt_not_found); });
     }
 };
 
 // ----------------------------------------------------------------------------
 // State: NwState_error
 //
-// Handling errors if they occur
-// This state has not been implemented yet.
-// It is assumed that if an error occurs, it will be stuck here.
 
 class NwState_error : public NetworkManager
 {
@@ -446,7 +431,9 @@ class NwState_error : public NetworkManager
 void
 NetworkManager::react (nwevent_wifi_disconnected const &)
 {
-    transit<NwState_connectWiFi> ();
+    transit<NwState_connectWiFi> (
+        [=] ()
+        { putNwStatus (nwstatus_wifi_not_found); });
 }
 
 void

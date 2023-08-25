@@ -17,12 +17,11 @@ extern xSemaphoreHandle mainstatusMutex;
 extern StorageMap storageMap;
 extern xSemaphoreHandle storageMapMutex;
 
-extern Mission mission;
-extern xSemaphoreHandle missionMutex;
-
 extern QueueHandle_t currentLineCountQueue;
 extern QueueHandle_t missionStatusQueue;
+extern QueueHandle_t missionQueue;
 
 extern xSemaphoreHandle missionSync;
+
 
 #endif // GLOBAL_EXTERN_H_
