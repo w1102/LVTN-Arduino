@@ -43,12 +43,12 @@ class MainState_initialize : public MainManager
     entry () override
     {
 
-        pinMode(MAGNET, OUTPUT);
-        digitalWrite(MAGNET, CONF_MAINFSM_MAGNET_OFF);
+        pinMode (MAGNET, OUTPUT);
+        digitalWrite (MAGNET, CONF_MAINFSM_MAGNET_OFF);
 
-        servo->setPeriodHertz(50);
-        servo->attach(SERVO, CONF_MAINFSM_SERVO_US_LOW, CONF_MAINFSM_SERVO_US_HIGH);
-        servo->write(CONF_MAINFSM_SERVO_PUSH_IN_POS);
+        servo->setPeriodHertz (50);
+        servo->attach (SERVO, CONF_MAINFSM_SERVO_US_LOW, CONF_MAINFSM_SERVO_US_HIGH);
+        servo->write (CONF_MAINFSM_SERVO_PUSH_IN_POS);
 
         mainstatusQueue = xQueueCreate (CONF_MAINFSM_QUEUE_LENGTH, sizeof (MainStatus));
 
@@ -302,12 +302,12 @@ class MainState_move : public MainManager
     {
         pid->Compute ();
 
-        int baseSpeed = CONF_MAINFSM_LOW_SPEED;
+        int baseSpeed = CONF_MAINFSM_MID_SPEED;
 
-        // if (abs (targetLineCount - currentLineCount) <= 1 || !actQueue.isEmpty ())
-        // {
-        //     baseSpeed = CONF_MAINFSM_LOW_SPEED;
-        // }
+        if (abs (targetLineCount - currentLineCount) <= 1 || !actQueue.isEmpty ())
+        {
+            baseSpeed = CONF_MAINFSM_LOW_SPEED;
+        }
 
         rhsMotor->setSpeed (baseSpeed + this->computedPos);
         lhsMotor->setSpeed (baseSpeed - this->computedPos);
@@ -490,7 +490,6 @@ class MainState_io : public MainManager
     {
         timerInit (onInterval, 3000, false);
         timerStart ();
-
     }
 
     void
@@ -513,7 +512,7 @@ class MainState_turnBack : public MainManager
     void
     entry () override
     {
-        waitCounter = 0;
+        step = 0;
 
         timerInit (onInterval, CONF_MAINFSM_INTERVAL_MS, true);
         timerStart ();
@@ -528,41 +527,41 @@ class MainState_turnBack : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        if (waitCounter < CONF_MAINFSM_TURN_WAIT)
+        int pos = makerLine->readPosition (STOP_POSITION);
+
+        if (step == 0 && (pos == LEFT_POSITION || pos == LEFT_POSITION - 1))
         {
-            waitCounter++;
-            rotation ();
+            step = 1;
+        }
+        else if (step == 0)
+        {
+            rotation (CONF_MAINFSM_HIGH_SPEED);
+        }
+        else if (pos >= -1 && pos <= 1)
+        {
+            timerStop ();
+
+            rhsMotor->stop ();
+            lhsMotor->stop ();
+
+            transit<MainState_move> ();
         }
         else
         {
-            int pos = makerLine->readPosition (STOP_POSITION);
-
-            if (pos >= -1 && pos <= 1)
-            {
-                timerStop ();
-
-                rhsMotor->stop ();
-                lhsMotor->stop ();
-
-                transit<MainState_move> ();
-            }
-            else
-            {
-                rotation ();
-            }
+            rotation (CONF_MAINFSM_LOW_SPEED);
         }
     }
 
   private:
-    int waitCounter;
+    int step = 0;
 
     void
-    rotation ()
+    rotation (int speed)
     {
         rhsMotor->reward ();
-        rhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+        rhsMotor->setSpeed (speed);
         lhsMotor->forward ();
-        lhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+        lhsMotor->setSpeed (speed);
     }
 };
 
