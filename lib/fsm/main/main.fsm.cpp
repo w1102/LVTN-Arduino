@@ -354,12 +354,15 @@ class MainState_bypass : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        if (makerLine->readPosition () != STOP_POSITION)
+        if (makerLine->readPosition (STOP_POSITION) != STOP_POSITION)
         {
+            timerStop ();
             rhsMotor->stop ();
             lhsMotor->stop ();
 
-            transit<MainState_move> ();
+            trigger ("MainState_bypass_trigger",
+                     [=] ()
+                     { transit<MainState_move> (); });
         }
         else
         {
@@ -393,9 +396,9 @@ class MainState_turnLeft : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        int pos = makerLine->readPosition (RIGHT_POSITION);
+        int pos = makerLine->readPosition (STOP_POSITION);
 
-        if (step == 0 && pos >= LEFT_POSITION)
+        if (step == 0 && pos == LEFT_POSITION)
         {
             step = 1;
         }
@@ -419,7 +422,7 @@ class MainState_turnLeft : public MainManager
         {
             rhsMotor->stop ();
             lhsMotor->forward ();
-            lhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+            lhsMotor->setSpeed (CONF_MAINFSM_LOW_SPEED);
         }
     }
 
@@ -448,9 +451,9 @@ class MainState_turnRight : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        int pos = makerLine->readPosition (LEFT_POSITION);
+        int pos = makerLine->readPosition (STOP_POSITION);
 
-        if (step == 0 && pos <= RIGHT_POSITION)
+        if (step == 0 && pos == RIGHT_POSITION)
         {
             step = 1;
         }
@@ -474,7 +477,7 @@ class MainState_turnRight : public MainManager
         {
             lhsMotor->stop ();
             rhsMotor->forward ();
-            rhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+            rhsMotor->setSpeed (CONF_MAINFSM_LOW_SPEED);
         }
     }
 
@@ -488,21 +491,39 @@ class MainState_io : public MainManager
     void
     entry () override
     {
-        timerInit (onInterval, 3000, false);
-        timerStart ();
-    }
-
-    void
-    exit () override
-    {
         itemPicked = !itemPicked;
-        timerDelete ();
+        trigger ("MainState_io_trigger",
+                 [=] ()
+                 {
+                     servoPutOut ();
+                     digitalWrite (MAGNET, itemPicked ? CONF_MAINFSM_MAGNET_ON : CONF_MAINFSM_MAGNET_OFF);
+                     vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
+                     servoPutIn ();
+                     vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
+
+                     transit<MainState_move> ();
+                 });
+    }
+
+  private:
+    void
+    servoPutOut ()
+    {
+        for (int i = CONF_MAINFSM_SERVO_PUSH_IN_POS; i <= CONF_MAINFSM_SERVO_PUSH_OUT_POS; i++)
+        {
+            servo->write (i);
+            vTaskDelay (CONF_MAINFSM_INTERVAL_MS);
+        }
     }
 
     void
-    react (mainevent_interval const &) override
+    servoPutIn ()
     {
-        transit<MainState_move> ();
+        for (int i = CONF_MAINFSM_SERVO_PUSH_OUT_POS; i >= CONF_MAINFSM_SERVO_PUSH_IN_POS; i--)
+        {
+            servo->write (i);
+            vTaskDelay (CONF_MAINFSM_INTERVAL_MS);
+        }
     }
 };
 
@@ -575,8 +596,6 @@ class MainState_done : public MainManager
             homing = false;
             isHome = true;
         }
-
-        itemPicked = false;
 
         rhsMotor->stop ();
         lhsMotor->stop ();

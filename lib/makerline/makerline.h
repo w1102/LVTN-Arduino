@@ -4,8 +4,13 @@
 #define NUM_OF_SENS 5
 
 #define STOP_POSITION 5
+
+#define NEAR_LEFT_POSITION 3
 #define LEFT_POSITION 4
+
+#define NEAR_RIGHT_POSITION -3
 #define RIGHT_POSITION -4
+
 
 #define PREV_DEFAULT 10
 
