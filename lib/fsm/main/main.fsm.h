@@ -21,6 +21,7 @@ Implementing a state machine to manage main actions:
 #include <Arduino.h>
 #include <cppQueue.h>
 #include <math.h>
+#include "ESP32Servo.h"
 
 // ----------------------------------------------------------------------------
 // Event declarations
@@ -64,16 +65,23 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     static L298N *lhsMotor;
     static L298N *rhsMotor;
     static MakerLine *makerLine;
+    static Servo *servo;
     static int targetLineCount;
     static int currentLineCount;
     static bool itemPicked;
+
     static bool homing;
+    static bool isHome;
+
+    static bool isMainBranch;
+    static Direction robotDir;
+
     static cppQueue actQueue;
     static MissionData mission;
     static MissionPhase currentPhase;
 
-    static void pushAct (ActType act, bool forceExcu = false);
-    static ActData popAct ();
+    void pushAct (ActType act, bool forceExcu = false);
+    ActData popAct ();
 
     void timerInit (TimerCallbackFunction_t, TickType_t, UBaseType_t autoReaload = false);
     void timerStart ();

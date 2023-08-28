@@ -12,6 +12,7 @@
 /* global variable declarations */
 AsyncMqttClient MQTT;
 QueueHandle_t nwstatusQueue;
+SemaphoreHandle_t missionSyncMsg;
 
 /* forward state declarations */
 class NwState_initialize;
@@ -20,7 +21,6 @@ class NwState_configWiFi;
 class NwState_connectMqtt;
 class NwState_subscribeMqtt;
 class NwState_idle;
-class NwState_tracking;
 class NwState_error;
 
 /* callback declarations */
@@ -49,7 +49,9 @@ class NwState_initialize : public NetworkManager
     entry () override
     {
         nwstatusQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (NwStatus));
-        xSemaphoreTake (missionSync, portMAX_DELAY);
+
+        missionSyncMsg = xSemaphoreCreateBinary ();
+        xSemaphoreGive (missionSyncMsg);
 
         MQTT.setServer (NW_MQTT_HOST, NW_MQTT_PORT);
         MQTT.setCredentials (NW_MQTT_USERNAME, NW_MQTT_PASSWORD);
@@ -332,52 +334,6 @@ class NwState_idle : public NetworkManager
     entry () override
     {
         putNwStatus (nwstatus_good);
-    }
-
-    void
-    react (nwevent_mqtt_disconnected const &)
-    {
-        transit<NwState_connectMqtt> ();
-    }
-
-    void
-    react (nwevent_mqtt_msg_mission const &e) override
-    {
-        String payload = String (e.payload, e.len);
-
-        MissionData mission;
-        if (parseMissionMsg (mission, payload))
-        {
-            xQueueSend (missionQueue, &mission, 0);
-        }
-
-        // xSemaphoreTake (missionMutex, portMAX_DELAY);
-        // bool isMissionValid = mission.parseMissionMsg (payload);
-        // xSemaphoreGive (missionMutex);
-
-        // transit<NwState_tracking> (
-        //     [=] ()
-        //     {
-        //         xSemaphoreGive (missionSync);
-
-        //         MissionStatus tasking = missionstatus_taking;
-        //         xQueueSend (missionStatusQueue, &tasking, portMAX_DELAY);
-        //     },
-        //     [=] () -> bool
-        //     { return isMissionValid; });
-    }
-};
-
-// ----------------------------------------------------------------------------
-// State: NwState_tracking
-//
-
-class NwState_tracking : public NetworkManager
-{
-  public:
-    void
-    entry () override
-    {
         timerInit (onTimeout, pdMS_TO_TICKS (CONF_NWFSM_TRACKING_INTERVAL_MS));
         timerStart ();
     }
@@ -389,30 +345,46 @@ class NwState_tracking : public NetworkManager
     }
 
     void
-    react (nwevent_timeout const &) override
+    react (nwevent_mqtt_disconnected const &)
     {
-        xSemaphoreTake (missionSync, 0);
-
-        MissionStatus missionStatus;
-
-        if (xQueueReceive (missionStatusQueue, &missionStatus, 0) == pdTRUE)
-        {
-            transit<NwState_idle> ([=] () {},
-                                   [=] () -> bool
-                                   { return missionStatus == missionstatus_done; });
-        }
-        else
-        {
-            timerStart ();
-        }
+        transit<NwState_connectMqtt> ();
     }
 
     void
-    react (nwevent_mqtt_disconnected const &) override
+    react (nwevent_mqtt_msg_mission const &e) override
     {
-        transit<NwState_connectMqtt> (
-            [=] ()
-            { putNwStatus (nwstatus_mqtt_not_found); });
+        xSemaphoreTake (missionSyncMsg, portMAX_DELAY);
+
+        String payload = String (e.payload, e.len);
+
+        MissionData mission;
+        if (parseMissionMsg (mission, payload))
+        {
+            // MissionStatus tasking = missionstatus_taking;
+            // xQueueSend (missionStatusQueue, &tasking, 0);
+
+            xQueueSend (missionQueue, &mission, 0);
+        }
+
+        xSemaphoreGive (missionSyncMsg);
+    }
+
+    void
+    react (nwevent_timeout const &) override
+    {
+        // if (xSemaphoreTake (missionSyncMsg, 0) == pdFALSE)
+        // {
+        //     return;
+        // }
+
+        // MissionStatus missionStatus;
+
+        // if (xQueueReceive (missionStatusQueue, &missionStatus, 0) == pdTRUE)
+        // {
+        // }
+
+        // xSemaphoreGive (missionSyncMsg);
+        // timerStart ();
     }
 };
 

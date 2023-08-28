@@ -30,6 +30,7 @@ Link: https://github.com/marvinroger/async-mqtt-client
 #include "main.fsm.h"
 #include "tinyfsm.hpp"
 #include <Arduino.h>
+#include "trigger.h"
 
 // ----------------------------------------------------------------------------
 // Event declarations

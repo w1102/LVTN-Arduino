@@ -21,6 +21,11 @@ typedef enum
     mainstatus_error
 } MainStatus;
 
+typedef enum {
+    forward,
+    reward
+} Direction;
+
 typedef enum
 {
     act_none,
@@ -29,7 +34,9 @@ typedef enum
     act_turnBack,
     act_bypass,
     act_io,
-    act_doneMission
+    act_done_origi,
+    act_done_incre,
+    act_done_decre
 } ActType;
 
 typedef struct
@@ -55,7 +62,8 @@ typedef enum
 
 typedef enum {
     phase1,
-    phase2
+    phase2,
+    phase3,
 } MissionPhase;
 
 
@@ -67,6 +75,7 @@ typedef struct {
 typedef struct {
     MissionPhaseData phase1;
     MissionPhaseData phase2;
+    bool stopInMainBranch;
 } MissionData;
 
 typedef struct
