@@ -14,11 +14,25 @@
 #define KD 0
 
 // ----------------------------------------------------------------------------
+// Ultrasonic task configuration
+//
+
+#define CONF_ULTRASONICTASK_STACK_SIZE (configMINIMAL_STACK_SIZE + 2000)
+#define CONF_ULTRASONICTASK_PRIORITY (1)
+#define CONF_ULTRASONICTASK_RUN_CORE (ARDUINO_RUNNING_CORE)
+#define CONF_ULTRASONICTASK_NAME "UltrasonicTask"
+#define CONF_ULTRASONICTASK_INTERVAL 5
+#define CONF_ULTRASONICTASK_SPEED_OF_SOUND 0.034
+#define CONF_ULTRASONICTASK_MIN_DISTANCE 7
+
+
+
+// ----------------------------------------------------------------------------
 // Main task configuration
 //
 
 #define CONF_MAINTASK_STACK_SIZE (configMINIMAL_STACK_SIZE + 13000)
-#define CONF_MAINTASK_PRIORITY (configMAX_PRIORITIES - 1)
+#define CONF_MAINTASK_PRIORITY (configMAX_PRIORITIES - 10)
 #define CONF_MAINTASK_RUN_CORE (0)
 #define CONF_MAINTASK_NAME "MainTask"
 
@@ -74,7 +88,7 @@
 #define CONF_MAINFSM_INTERVAL_MS 5
 #define CONF_MAINFSM_QUEUE_LENGTH 10
 #define CONF_MAINFSM_LOW_SPEED 600
-#define CONF_MAINFSM_MID_SPEED 750
+#define CONF_MAINFSM_MID_SPEED 700
 #define CONF_MAINFSM_HIGH_SPEED 950
 
 #define CONF_MAINFSM_SERVO_US_LOW 400

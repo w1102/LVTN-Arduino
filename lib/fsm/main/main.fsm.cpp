@@ -42,7 +42,6 @@ class MainState_initialize : public MainManager
     void
     entry () override
     {
-
         pinMode (MAGNET, OUTPUT);
         digitalWrite (MAGNET, CONF_MAINFSM_MAGNET_OFF);
 
@@ -208,10 +207,17 @@ class MainState_move : public MainManager
     void
     react (mainevent_interval const &) override
     {
-        ActData act;
-        if (actQueue.peek (&act) && act.forceExcu == true)
+        bool actPeeked = actQueue.peek (&nextAct);
+
+        if (actPeeked && nextAct.forceExcu == true)
         {
             sendMainEvent (mainevent_dispatch_act {});
+            return;
+        }
+
+        if (obstacleCheck () && (!actPeeked || nextAct.type != act_io) )
+        {
+            obstacleAction ();
             return;
         }
 
@@ -270,6 +276,9 @@ class MainState_move : public MainManager
         computedPos;
     PID *pid;
 
+    ActData nextAct;
+    ActData prevAct;
+
     void
     stopHandle ()
     {
@@ -309,7 +318,10 @@ class MainState_move : public MainManager
             baseSpeed = CONF_MAINFSM_LOW_SPEED;
         }
 
+        rhsMotor->forward ();
         rhsMotor->setSpeed (baseSpeed + this->computedPos);
+
+        lhsMotor->forward ();
         lhsMotor->setSpeed (baseSpeed - this->computedPos);
     }
 
@@ -354,15 +366,23 @@ class MainState_bypass : public MainManager
     void
     react (mainevent_interval const &) override
     {
+        if (obstacleCheck ())
+        {
+            obstacleAction ();
+            return;
+        }
+
         if (makerLine->readPosition (STOP_POSITION) != STOP_POSITION)
         {
             timerStop ();
             rhsMotor->stop ();
             lhsMotor->stop ();
 
-            trigger ("MainState_bypass_trigger",
-                     [=] ()
-                     { transit<MainState_move> (); });
+            trigger (
+                "MainState_bypass_trigger",
+                [=] ()
+                { transit<MainState_move> (); },
+                50);
         }
         else
         {
@@ -396,6 +416,12 @@ class MainState_turnLeft : public MainManager
     void
     react (mainevent_interval const &) override
     {
+        if (obstacleCheck ())
+        {
+            obstacleAction ();
+            return;
+        }
+
         int pos = makerLine->readPosition (STOP_POSITION);
 
         if (step == 0 && pos == LEFT_POSITION)
@@ -422,7 +448,7 @@ class MainState_turnLeft : public MainManager
         {
             rhsMotor->stop ();
             lhsMotor->forward ();
-            lhsMotor->setSpeed (CONF_MAINFSM_LOW_SPEED);
+            lhsMotor->setSpeed (CONF_MAINFSM_MID_SPEED);
         }
     }
 
@@ -451,6 +477,12 @@ class MainState_turnRight : public MainManager
     void
     react (mainevent_interval const &) override
     {
+        if (obstacleCheck ())
+        {
+            obstacleAction ();
+            return;
+        }
+
         int pos = makerLine->readPosition (STOP_POSITION);
 
         if (step == 0 && pos == RIGHT_POSITION)
@@ -477,7 +509,7 @@ class MainState_turnRight : public MainManager
         {
             lhsMotor->stop ();
             rhsMotor->forward ();
-            rhsMotor->setSpeed (CONF_MAINFSM_LOW_SPEED);
+            rhsMotor->setSpeed (CONF_MAINFSM_MID_SPEED);
         }
     }
 
@@ -569,7 +601,7 @@ class MainState_turnBack : public MainManager
         }
         else
         {
-            rotation (CONF_MAINFSM_LOW_SPEED);
+            rotation (CONF_MAINFSM_MID_SPEED);
         }
     }
 
@@ -636,13 +668,29 @@ cppQueue MainManager::actQueue (sizeof (ActData), 20);
 
 L298N *MainManager::lhsMotor = new L298N (M1_EN, M1_PA, M1_PB);
 L298N *MainManager::rhsMotor = new L298N (M2_EN, M2_PA, M2_PB);
-MakerLine *MainManager::makerLine = new MakerLine (
-    SENSOR_1,
-    SENSOR_2,
-    SENSOR_3,
-    SENSOR_4,
-    SENSOR_5);
+MakerLine *MainManager::makerLine = new MakerLine (SENSOR_1, SENSOR_2, SENSOR_3, SENSOR_4, SENSOR_5);
 Servo *MainManager::servo = new Servo ();
+
+bool
+MainManager::obstacleCheck ()
+{
+    if (xSemaphoreTake (ultrasonicThresholdDistanceSync, 0) == pdTRUE)
+    {
+        xSemaphoreGive (ultrasonicThresholdDistanceSync);
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+void
+MainManager::obstacleAction ()
+{
+    rhsMotor->stop ();
+    lhsMotor->stop ();
+}
 
 void
 MainManager::pushAct (ActType act, bool forceExcu)

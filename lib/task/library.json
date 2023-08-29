@@ -12,7 +12,8 @@
     "build": {
         "flags": [
             "-I main/",
-            "-I network/"
+            "-I network/",
+            "-I ultrasonic/"
         ]
     }
   }

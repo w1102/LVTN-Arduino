@@ -23,5 +23,8 @@ extern QueueHandle_t missionQueue;
 
 extern xSemaphoreHandle missionSync;
 
+extern xSemaphoreHandle ultrasonicThresholdDistanceSync;
+extern QueueHandle_t ultrasonicDistanceQueue;
+
 
 #endif // GLOBAL_EXTERN_H_

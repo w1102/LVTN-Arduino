@@ -80,6 +80,9 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     static MissionData mission;
     static MissionPhase currentPhase;
 
+    bool obstacleCheck();
+    void obstacleAction();
+
     void pushAct (ActType act, bool forceExcu = false);
     ActData popAct ();
 

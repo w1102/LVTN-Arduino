@@ -23,11 +23,17 @@ QueueHandle_t missionQueue;
 
 xSemaphoreHandle missionSync;
 
+xSemaphoreHandle ultrasonicThresholdDistanceSync;
+QueueHandle_t ultrasonicDistanceQueue;
+
 void
 initMutex ()
 {
     missionSync = xSemaphoreCreateBinary();
     xSemaphoreGive(missionSync);
+
+    ultrasonicThresholdDistanceSync = xSemaphoreCreateBinary();
+    xSemaphoreGive(ultrasonicThresholdDistanceSync);
 
     nwstatusMutex = xSemaphoreCreateMutex();
     mainstatusMutex = xSemaphoreCreateMutex ();
@@ -36,6 +42,7 @@ initMutex ()
     currentLineCountQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
     missionStatusQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionStatus));
     missionQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionData));
+    ultrasonicDistanceQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(int));
 }
 
 #endif // GLOBAL_H_
