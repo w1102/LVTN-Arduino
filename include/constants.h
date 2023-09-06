@@ -58,9 +58,9 @@ namespace constants
 
     namespace network
     {
-        inline constexpr uint8_t maxConnectionAttempts {3}; 
-        inline constexpr uint16_t connectTimeoutMs{pdMS_TO_TICKS(3000)};
-        inline constexpr uint16_t trackingInterval{pdMS_TO_TICKS(500)};
+        inline constexpr uint8_t maxConnectionAttempts { 3 };
+        inline constexpr uint16_t connectTimeoutMs { pdMS_TO_TICKS (3000) };
+        inline constexpr uint16_t trackingInterval { pdMS_TO_TICKS (500) };
 
         inline constexpr uint16_t taskStackDepth { configMINIMAL_STACK_SIZE + 6144 };
         inline constexpr uint8_t taskPriority { 10 };
@@ -80,6 +80,29 @@ namespace constants
         inline constexpr char mqttLocationTopic[] { "quang/logistics/botlocation" };
         inline constexpr char mqttMissionTopic[] { "quang/logistics/mission" };
 
+    }
+
+    namespace main
+    {
+        inline constexpr uint8_t bypassDelayMs {pdMS_TO_TICKS(35)};
+
+        inline constexpr uint16_t servoDelayMs {pdMS_TO_TICKS(1500)};
+        inline constexpr uint16_t servoUsLow {400};
+        inline constexpr uint16_t servoUsHigh {2400};
+        inline constexpr uint8_t servoPushIn {0};
+        inline constexpr uint8_t servoPushOut {95};
+
+        inline constexpr uint8_t magnetOn{false};
+        inline constexpr uint8_t magnetOff{true};
+
+        inline constexpr uint16_t taskStackDepth { configMINIMAL_STACK_SIZE + 13312 };
+        inline constexpr uint8_t taskPriority { 20 };
+        inline constexpr uint8_t taskRunningCore { 0 };
+        inline constexpr char taskName[] { "main" };
+
+        inline constexpr uint16_t dpQueueStackDepth { configMINIMAL_STACK_SIZE + 2048 };
+        inline constexpr uint8_t dpQueuethreadCnt { 2 };
+        inline constexpr char dpQueueName[] { "MainDpQueue" };
     }
 
 } // namespace constants

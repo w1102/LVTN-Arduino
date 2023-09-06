@@ -10,7 +10,8 @@ Implementing a state machine to manage main actions:
 
 #include "PID_v1.h"
 #include "config.h"
-#include "global.extern.h"
+#include "constants.h"
+#include "global.h"
 #include "gpio.h"
 #include "l298n.h"
 #include "makerline.h"
@@ -19,8 +20,9 @@ Implementing a state machine to manage main actions:
 #include "trigger.h"
 #include "types.h"
 #include <Arduino.h>
-#include <cppQueue.h>
+#include "cppQueue.h"
 #include <math.h>
+#include "dispatchqueue.h"
 #include "ESP32Servo.h"
 #include "constants.h"
 
@@ -80,6 +82,8 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     static cppQueue actQueue;
     static MissionData mission;
     static MissionPhase currentPhase;
+
+    static dispatch_queue dpQueue;
 
     bool obstacleCheck();
     void obstacleAction();

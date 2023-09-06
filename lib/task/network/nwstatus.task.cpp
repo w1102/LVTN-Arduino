@@ -1,7 +1,7 @@
 #include "nwstatus.task.h"
 
 #include "config.h"
-#include "global.extern.h"
+#include "global.h"
 #include "gpio.h"
 #include "helper.h"
 
@@ -15,9 +15,9 @@ nwStatusTask (void *params)
     {
         NwStatus currentStatus;
         
-        xSemaphoreTake (nwstatusMutex, portMAX_DELAY);
-        currentStatus = nwstatus;
-        xSemaphoreGive (nwstatusMutex);
+        xSemaphoreTake (global::nwstatusMutex, portMAX_DELAY);
+        currentStatus = global::nwstatus;
+        xSemaphoreGive (global::nwstatusMutex);
 
         switch (currentStatus)
         {

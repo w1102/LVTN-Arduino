@@ -24,12 +24,12 @@ ultrasonicTask (void *params)
 
         if (distance < constants::config::ultrasonic::minDistance && !isLocked)
         {
-            xSemaphoreTake (ultrasonicThresholdDistanceSync, portMAX_DELAY);
+            xSemaphoreTake (global::ultrasonicThresholdDistanceSync, portMAX_DELAY);
             isLocked = true;
         }
         else if (distance > constants::config::ultrasonic::minDistance && isLocked)
         {
-            xSemaphoreGive (ultrasonicThresholdDistanceSync);
+            xSemaphoreGive (global::ultrasonicThresholdDistanceSync);
             isLocked = false;
         }
 

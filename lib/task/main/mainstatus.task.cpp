@@ -1,7 +1,7 @@
 #include "mainstatus.task.h"
 
 #include "config.h"
-#include "global.extern.h"
+#include "global.h"
 #include "gpio.h"
 #include "helper.h"
 
@@ -14,9 +14,9 @@ void mainStatusTask(void *params)
 
     for (;;)
     {
-        xSemaphoreTake(mainstatusMutex, portMAX_DELAY);
-        MainStatus currentStatus = mainstatus;
-        xSemaphoreGive(mainstatusMutex);
+        xSemaphoreTake(global::mainstatusMutex, portMAX_DELAY);
+        MainStatus currentStatus = global::mainstatus;
+        xSemaphoreGive(global::mainstatusMutex);
 
         switch (currentStatus)
         {

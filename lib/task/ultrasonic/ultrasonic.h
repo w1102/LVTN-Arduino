@@ -2,7 +2,7 @@
 #define ULTRA_SONIC_H_
 
 #include "constants.h"
-#include "global.extern.h"
+#include "global.h"
 #include "gpio.h"
 #include "types.h"
 #include <Arduino.h>

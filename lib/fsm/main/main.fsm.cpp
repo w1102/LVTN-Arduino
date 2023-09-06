@@ -51,13 +51,13 @@ class MainState_initialize : public MainManager
 
         mainstatusQueue = xQueueCreate (CONF_MAINFSM_QUEUE_LENGTH, sizeof (MainStatus));
 
-        trigger ("MainState_initialize_Trigger",
-                 [=] ()
-                 {
-                     xQueueReceive (currentLineCountQueue, &currentLineCount, portMAX_DELAY);
-                     putMainStatus (mainstatus_idle);
-                     transit<MainState_idle> ();
-                 });
+        dpQueue.dispatch (
+            [=] ()
+            {
+                xQueueReceive (global::currentLineCountQueue, &currentLineCount, portMAX_DELAY);
+                putMainStatus (mainstatus_idle);
+                transit<MainState_idle> ();
+            });
     }
 };
 
@@ -71,7 +71,7 @@ class MainState_idle : public MainManager
     void
     entry () override
     {
-        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), true);
+        timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
@@ -91,7 +91,7 @@ class MainState_idle : public MainManager
                 goMainBranch ();
 
                 MissionStatus missionRunning = missionstatus_running;
-                xQueueSend (missionStatusQueue, &missionRunning, 0);
+                xQueueSend (global::missionStatusQueue, &missionRunning, 0);
 
                 MainStatus mainRunning = mainstatus_runMission;
                 xQueueSend (mainstatusQueue, &mainRunning, 0);
@@ -158,7 +158,7 @@ class MainState_idle : public MainManager
     bool
     isTaskingIOMission ()
     {
-        if (xQueueReceive (missionQueue, &mission, 0) == pdTRUE)
+        if (xQueueReceive (global::missionQueue, &mission, 0) == pdTRUE)
         {
             currentPhase = phase1;
             targetLineCount = mission.phase1.target;
@@ -215,7 +215,7 @@ class MainState_move : public MainManager
             return;
         }
 
-        if (obstacleCheck () && (!actPeeked || nextAct.type != act_io) )
+        if (obstacleCheck () && (!actPeeked || nextAct.type != act_io))
         {
             obstacleAction ();
             return;
@@ -378,11 +378,12 @@ class MainState_bypass : public MainManager
             rhsMotor->stop ();
             lhsMotor->stop ();
 
-            trigger (
-                "MainState_bypass_trigger",
+            dpQueue.dispatch (
                 [=] ()
-                { transit<MainState_move> (); },
-                50);
+                {
+                    vTaskDelay (constants::main::bypassDelayMs);
+                    transit<MainState_move> ();
+                });
         }
         else
         {
@@ -524,17 +525,17 @@ class MainState_io : public MainManager
     entry () override
     {
         itemPicked = !itemPicked;
-        trigger ("MainState_io_trigger",
-                 [=] ()
-                 {
-                     servoPutOut ();
-                     digitalWrite (MAGNET, itemPicked ? CONF_MAINFSM_MAGNET_ON : CONF_MAINFSM_MAGNET_OFF);
-                     vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
-                     servoPutIn ();
-                     vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
+        dpQueue.dispatch (
+            [=] ()
+            {
+                servoPutOut ();
+                digitalWrite (MAGNET, itemPicked ? CONF_MAINFSM_MAGNET_ON : CONF_MAINFSM_MAGNET_OFF);
+                vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
+                servoPutIn ();
+                vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
 
-                     transit<MainState_move> ();
-                 });
+                transit<MainState_move> ();
+            });
     }
 
   private:
@@ -633,7 +634,7 @@ class MainState_done : public MainManager
         lhsMotor->stop ();
 
         MissionStatus missionDone = missionstatus_done;
-        xQueueSend (missionStatusQueue, &missionDone, 0);
+        xQueueSend (global::missionStatusQueue, &missionDone, 0);
 
         MainStatus mainIdle = mainstatus_idle;
         xQueueSend (mainstatusQueue, &mainIdle, 0);
@@ -655,6 +656,11 @@ MainManager::MainManager ()
 
 MainManager::~MainManager () {}
 
+dispatch_queue MainManager::dpQueue (
+    constants::main::dpQueueName,
+    constants::main::dpQueuethreadCnt,
+    constants::main::dpQueueStackDepth);
+
 int MainManager::targetLineCount = 0;
 int MainManager::currentLineCount = 0;
 bool MainManager::itemPicked = false;
@@ -674,9 +680,9 @@ Servo *MainManager::servo = new Servo ();
 bool
 MainManager::obstacleCheck ()
 {
-    if (xSemaphoreTake (ultrasonicThresholdDistanceSync, 0) == pdTRUE)
+    if (xSemaphoreTake (global::ultrasonicThresholdDistanceSync, 0) == pdTRUE)
     {
-        xSemaphoreGive (ultrasonicThresholdDistanceSync);
+        xSemaphoreGive (global::ultrasonicThresholdDistanceSync);
         return false;
     }
     else
@@ -783,15 +789,15 @@ mainStatusLoop ()
     }
 
     /* lock mainstatusMutex if it's availabel, if not then wait */
-    if (xSemaphoreTake (mainstatusMutex, portMAX_DELAY) == pdFALSE)
+    if (xSemaphoreTake (global::mainstatusMutex, portMAX_DELAY) == pdFALSE)
     {
         return;
     }
 
-    mainstatus = currentStatus;
+    global::mainstatus = currentStatus;
 
     /* unlock mainstatusMutex */
-    xSemaphoreGive (mainstatusMutex);
+    xSemaphoreGive (global::mainstatusMutex);
 }
 
 inline void

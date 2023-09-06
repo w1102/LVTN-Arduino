@@ -192,14 +192,11 @@ class NwState_subscribeMqtt : public NetworkManager
             mapMsg.clear ();
 
             dpQueue.dispatch (
-                [=, isValidMap { false }] () mutable
+                [=] () mutable
                 {
-                    xSemaphoreTake (storageMapMutex, portMAX_DELAY);
-                    if (storageMap.parseMapMsg (cpyMapMsg))
-                    {
-                        xSemaphoreGive (retainSyncMsg);
-                    }
-                    xSemaphoreGive (storageMapMutex);
+                    xSemaphoreTake (global::storageMapMutex, portMAX_DELAY);
+                    global::storageMap.parseMapMsg (cpyMapMsg) && xSemaphoreGive (retainSyncMsg);
+                    xSemaphoreGive (global::storageMapMutex);
                 });
         }
     }
@@ -215,13 +212,13 @@ class NwState_subscribeMqtt : public NetworkManager
                 xSemaphoreTake (retainSyncMsg, portMAX_DELAY);
                 xSemaphoreGive (retainSyncMsg);
 
-                xSemaphoreTake (storageMapMutex, portMAX_DELAY);
-                isValidLineCount = storageMap.parseLineCountMsg (lineCount, locationMsg);
-                xSemaphoreGive (storageMapMutex);
+                xSemaphoreTake (global::storageMapMutex, portMAX_DELAY);
+                isValidLineCount = global::storageMap.parseLineCountMsg (lineCount, locationMsg);
+                xSemaphoreGive (global::storageMapMutex);
 
                 if (isValidLineCount)
                 {
-                    xQueueSend (currentLineCountQueue, &lineCount, portMAX_DELAY);
+                    xQueueSend (global::currentLineCountQueue, &lineCount, portMAX_DELAY);
                     transit<NwState_idle> (
                         [=] ()
                         {
@@ -280,8 +277,8 @@ class NwState_idle : public NetworkManager
             {
                 if (parseMissionMsg (mission, missionMsg))
                 {
-                    xQueueSend (missionStatusQueue, &tasking, portMAX_DELAY);
-                    xQueueSend (missionQueue, &mission, portMAX_DELAY);
+                    xQueueSend (global::missionStatusQueue, &tasking, portMAX_DELAY);
+                    xQueueSend (global::missionQueue, &mission, portMAX_DELAY);
                 }
             });
     }
@@ -290,7 +287,7 @@ class NwState_idle : public NetworkManager
     react (nwevent_timeout const &) override
     {
         MissionStatus missionStatus;
-        if (xQueueReceive (missionStatusQueue, &missionStatus, 0) == pdTRUE)
+        if (xQueueReceive (global::missionStatusQueue, &missionStatus, 0) == pdTRUE)
         {
             // Serial.printf ("tracking: %d\n", missionStatus);
         }
@@ -388,9 +385,9 @@ NetworkManager::pushStatus (NwStatus status)
     dpQueue.dispatch (
         [=] ()
         {
-            xSemaphoreTake (nwstatusMutex, portMAX_DELAY);
-            nwstatus = status;
-            xSemaphoreGive (nwstatusMutex);
+            xSemaphoreTake (global::nwstatusMutex, portMAX_DELAY);
+            global::nwstatus = status;
+            xSemaphoreGive (global::nwstatusMutex);
         });
 }
 
