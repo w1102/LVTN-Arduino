@@ -1,21 +1,9 @@
 #include "main.fsm.h"
 
-/*
-Implementing a state machine to manage main actions:
-    * line follower
-    * tasking mission
-    * ...
-*/
-
 // ----------------------------------------------------------------------------
-// prototype declarations
-// clang-format off
-// 
+// Forward declarations
+//
 
-/* global variable declarations */
-QueueHandle_t mainstatusQueue;
-
-/* state declarations */
 class MainState_initialize;
 class MainState_idle;
 class MainState_move;
@@ -26,14 +14,8 @@ class MainState_turnRight;
 class MainState_turnBack;
 class MainState_done;
 
-/* helper declarations */
-
-void onInterval(TimerHandle_t t);
-inline void putMainStatus(MainStatus status);
-
 // ----------------------------------------------------------------------------
-// State: MainState_initialize
-// clang-format on
+// State implementations
 //
 
 class MainState_initialize : public MainManager
@@ -43,27 +25,24 @@ class MainState_initialize : public MainManager
     entry () override
     {
         pinMode (MAGNET, OUTPUT);
-        digitalWrite (MAGNET, CONF_MAINFSM_MAGNET_OFF);
+        digitalWrite (MAGNET, constants::main::magnetOff);
 
-        servo->setPeriodHertz (50);
-        servo->attach (SERVO, CONF_MAINFSM_SERVO_US_LOW, CONF_MAINFSM_SERVO_US_HIGH);
-        servo->write (CONF_MAINFSM_SERVO_PUSH_IN_POS);
-
-        mainstatusQueue = xQueueCreate (CONF_MAINFSM_QUEUE_LENGTH, sizeof (MainStatus));
+        servo->setPeriodHertz (constants::main::servoPeriod);
+        servo->attach (SERVO, constants::main::servoUsLow, constants::main::servoUsHigh);
+        servo->write (constants::main::servoPushIn);
 
         dpQueue.dispatch (
             [=] ()
             {
                 xQueueReceive (global::currentLineCountQueue, &currentLineCount, portMAX_DELAY);
-                putMainStatus (mainstatus_idle);
-                transit<MainState_idle> ();
+                transit<MainState_idle> (
+                    [=] ()
+                    {
+                        pushStatus (mainstatus_idle);
+                    });
             });
     }
 };
-
-// ----------------------------------------------------------------------------
-// State: MainState_idle
-//
 
 class MainState_idle : public MainManager
 {
@@ -91,10 +70,9 @@ class MainState_idle : public MainManager
                 goMainBranch ();
 
                 MissionStatus missionRunning = missionstatus_running;
-                xQueueSend (global::missionStatusQueue, &missionRunning, 0);
+                xQueueSend (global::missionStatusQueue, &missionRunning, portMAX_DELAY);
 
-                MainStatus mainRunning = mainstatus_runMission;
-                xQueueSend (mainstatusQueue, &mainRunning, 0);
+                pushStatus (mainstatus_runMission);
             },
             [=] () -> bool
             {
@@ -106,14 +84,16 @@ class MainState_idle : public MainManager
     void
     leaveHome ()
     {
-        if (isHome)
+        if (!isHome)
         {
-            String *leaveHomeActs = new String ("TB;Bp;");
-            parseMissionAction (&actQueue, leaveHomeActs);
-
-            isHome = false;
-            isMainBranch = false;
+            return;
         }
+
+        String *leaveHomeActs = new String ("TB;Bp;");
+        parseMissionAction (&actQueue, leaveHomeActs);
+
+        isHome = false;
+        isMainBranch = false;
     }
 
     void
@@ -172,35 +152,33 @@ class MainState_idle : public MainManager
     }
 };
 
-// ----------------------------------------------------------------------------
-// State: MainState_missionRecive
-//
-
 class MainState_move : public MainManager
 {
   public:
     void
     entry () override
     {
-        setPos = 0;
-        currentPos = 0;
-        computedPos = 0;
-        pid = new PID (&currentPos, &computedPos, &setPos, KP, KI, KD, AUTOMATIC);
+        pid = new PID (
+            &currentPos,
+            &computedPos,
+            &setPos,
+            constants::main::kp,
+            constants::main::ki,
+            constants::main::kd,
+            AUTOMATIC);
 
-        pid->SetSampleTime (CONF_MAINFSM_INTERVAL_MS);
+        pid->SetSampleTime (constants::global::intervalMs);
         pid->SetMode (AUTOMATIC);
         pid->SetOutputLimits (-1024, 1024);
 
-        rhsMotor->forward ();
-        lhsMotor->forward ();
-
-        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), true);
+        timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
     void
     exit () override
     {
+        delete pid;
         timerDelete ();
     }
 
@@ -271,13 +249,9 @@ class MainState_move : public MainManager
     }
 
   private:
-    double setPos,
-        currentPos,
-        computedPos;
+    double setPos { 0 }, currentPos { 0 }, computedPos { 0 };
     PID *pid;
-
     ActData nextAct;
-    ActData prevAct;
 
     void
     stopHandle ()
@@ -311,11 +285,11 @@ class MainState_move : public MainManager
     {
         pid->Compute ();
 
-        int baseSpeed = CONF_MAINFSM_MID_SPEED;
+        int baseSpeed = constants::main::midSpeed;
 
         if (abs (targetLineCount - currentLineCount) <= 1 || !actQueue.isEmpty ())
         {
-            baseSpeed = CONF_MAINFSM_LOW_SPEED;
+            baseSpeed = constants::main::lowSpeed;
         }
 
         rhsMotor->forward ();
@@ -353,7 +327,7 @@ class MainState_bypass : public MainManager
     void
     entry () override
     {
-        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), true);
+        timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
@@ -387,10 +361,10 @@ class MainState_bypass : public MainManager
         }
         else
         {
-            rhsMotor->setSpeed (CONF_MAINFSM_LOW_SPEED);
+            rhsMotor->setSpeed (constants::main::lowSpeed);
             rhsMotor->forward ();
 
-            lhsMotor->setSpeed (CONF_MAINFSM_LOW_SPEED);
+            lhsMotor->setSpeed (constants::main::lowSpeed);
             lhsMotor->forward ();
         }
     }
@@ -402,9 +376,7 @@ class MainState_turnLeft : public MainManager
     void
     entry () override
     {
-        step = 0;
-
-        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), true);
+        timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
@@ -432,9 +404,9 @@ class MainState_turnLeft : public MainManager
         else if (step == 0)
         {
             rhsMotor->reward ();
-            rhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+            rhsMotor->setSpeed (constants::main::higSpeed);
             lhsMotor->forward ();
-            lhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+            lhsMotor->setSpeed (constants::main::higSpeed);
         }
         else if (pos >= -1 && pos <= 1)
         {
@@ -449,12 +421,12 @@ class MainState_turnLeft : public MainManager
         {
             rhsMotor->stop ();
             lhsMotor->forward ();
-            lhsMotor->setSpeed (CONF_MAINFSM_MID_SPEED);
+            lhsMotor->setSpeed (constants::main::midSpeed);
         }
     }
 
   private:
-    int step;
+    int step { 0 };
 };
 
 class MainState_turnRight : public MainManager
@@ -463,9 +435,7 @@ class MainState_turnRight : public MainManager
     void
     entry () override
     {
-        step = 0;
-
-        timerInit (onInterval, pdMS_TO_TICKS (CONF_MAINFSM_INTERVAL_MS), true);
+        timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
@@ -493,9 +463,9 @@ class MainState_turnRight : public MainManager
         else if (step == 0)
         {
             lhsMotor->reward ();
-            lhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+            lhsMotor->setSpeed (constants::main::higSpeed);
             rhsMotor->forward ();
-            rhsMotor->setSpeed (CONF_MAINFSM_HIGH_SPEED);
+            rhsMotor->setSpeed (constants::main::higSpeed);
         }
         else if (pos >= -1 && pos <= 1)
         {
@@ -510,12 +480,12 @@ class MainState_turnRight : public MainManager
         {
             lhsMotor->stop ();
             rhsMotor->forward ();
-            rhsMotor->setSpeed (CONF_MAINFSM_MID_SPEED);
+            rhsMotor->setSpeed (constants::main::midSpeed);
         }
     }
 
   private:
-    int step;
+    int step { 0 };
 };
 
 class MainState_io : public MainManager
@@ -529,10 +499,11 @@ class MainState_io : public MainManager
             [=] ()
             {
                 servoPutOut ();
-                digitalWrite (MAGNET, itemPicked ? CONF_MAINFSM_MAGNET_ON : CONF_MAINFSM_MAGNET_OFF);
-                vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
+                digitalWrite (MAGNET, itemPicked ? constants::main::magnetOn : constants::main::magnetOff);
+                vTaskDelay (constants::main::ioDelayMs);
+
                 servoPutIn ();
-                vTaskDelay (CONF_MAINFSM_SERVO_DELAY_TIME);
+                vTaskDelay (constants::main::ioDelayMs);
 
                 transit<MainState_move> ();
             });
@@ -542,20 +513,20 @@ class MainState_io : public MainManager
     void
     servoPutOut ()
     {
-        for (int i = CONF_MAINFSM_SERVO_PUSH_IN_POS; i <= CONF_MAINFSM_SERVO_PUSH_OUT_POS; i++)
+        for (int i = constants::main::servoPushIn; i <= constants::main::servoPushOut; i++)
         {
             servo->write (i);
-            vTaskDelay (CONF_MAINFSM_INTERVAL_MS);
+            vTaskDelay (constants::main::servoDelayMs);
         }
     }
 
     void
     servoPutIn ()
     {
-        for (int i = CONF_MAINFSM_SERVO_PUSH_OUT_POS; i >= CONF_MAINFSM_SERVO_PUSH_IN_POS; i--)
+        for (int i = constants::main::servoPushOut; i >= constants::main::servoPushIn; i--)
         {
             servo->write (i);
-            vTaskDelay (CONF_MAINFSM_INTERVAL_MS);
+            vTaskDelay (constants::main::servoDelayMs);
         }
     }
 };
@@ -566,9 +537,7 @@ class MainState_turnBack : public MainManager
     void
     entry () override
     {
-        step = 0;
-
-        timerInit (onInterval, CONF_MAINFSM_INTERVAL_MS, true);
+        timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
@@ -589,7 +558,7 @@ class MainState_turnBack : public MainManager
         }
         else if (step == 0)
         {
-            rotation (CONF_MAINFSM_HIGH_SPEED);
+            rotation (constants::main::higSpeed);
         }
         else if (pos >= -1 && pos <= 1)
         {
@@ -602,12 +571,12 @@ class MainState_turnBack : public MainManager
         }
         else
         {
-            rotation (CONF_MAINFSM_MID_SPEED);
+            rotation (constants::main::midSpeed);
         }
     }
 
   private:
-    int step = 0;
+    int step { 0 };
 
     void
     rotation (int speed)
@@ -633,49 +602,50 @@ class MainState_done : public MainManager
         rhsMotor->stop ();
         lhsMotor->stop ();
 
-        MissionStatus missionDone = missionstatus_done;
-        xQueueSend (global::missionStatusQueue, &missionDone, 0);
+        dpQueue.dispatch (
+            [=] ()
+            {
+                transit<MainState_idle> (
+                    [=] ()
+                    {
+                        MissionStatus missionDone = missionstatus_done;
+                        xQueueSend (global::missionStatusQueue, &missionDone, portMAX_DELAY);
 
-        MainStatus mainIdle = mainstatus_idle;
-        xQueueSend (mainstatusQueue, &mainIdle, 0);
+                        pushStatus (mainstatus_idle);
 
-        isMainBranch = mission.stopInMainBranch;
-
-        trigger ("MainState_done_trigger", [=] ()
-                 { transit<MainState_idle> (); });
+                        isMainBranch = mission.stopInMainBranch;
+                    });
+            });
     }
 };
 
 // ----------------------------------------------------------------------------
-// Base state: default implementations
+// Initial state definition
 //
 
-MainManager::MainManager ()
-{
-}
+FSM_INITIAL_STATE (MainManager, MainState_initialize)
 
-MainManager::~MainManager () {}
+// ----------------------------------------------------------------------------
+// Base class implementations
+//
 
 dispatch_queue MainManager::dpQueue (
     constants::main::dpQueueName,
     constants::main::dpQueuethreadCnt,
     constants::main::dpQueueStackDepth);
 
-int MainManager::targetLineCount = 0;
-int MainManager::currentLineCount = 0;
-bool MainManager::itemPicked = false;
-bool MainManager::homing = false;
-bool MainManager::isHome = true;
-bool MainManager::isMainBranch = false;
-Direction MainManager::robotDir = forward;
+int MainManager::targetLineCount { 0 }, MainManager::currentLineCount { 0 };
+bool MainManager::itemPicked { false }, MainManager::homing { false }, MainManager::isHome { true }, MainManager::isMainBranch { false };
+
+Direction MainManager::robotDir { forward };
 MissionData MainManager::mission;
 MissionPhase MainManager::currentPhase;
-cppQueue MainManager::actQueue (sizeof (ActData), 20);
+cppQueue MainManager::actQueue (sizeof (ActData), constants::global::queueCnt);
 
-L298N *MainManager::lhsMotor = new L298N (M1_EN, M1_PA, M1_PB);
-L298N *MainManager::rhsMotor = new L298N (M2_EN, M2_PA, M2_PB);
-MakerLine *MainManager::makerLine = new MakerLine (SENSOR_1, SENSOR_2, SENSOR_3, SENSOR_4, SENSOR_5);
-Servo *MainManager::servo = new Servo ();
+L298N *MainManager::lhsMotor { new L298N (M1_EN, M1_PA, M1_PB) };
+L298N *MainManager::rhsMotor { new L298N (M2_EN, M2_PA, M2_PB) };
+MakerLine *MainManager::makerLine { new MakerLine (SENSOR_1, SENSOR_2, SENSOR_3, SENSOR_4, SENSOR_5) };
+Servo *MainManager::servo { new Servo () };
 
 bool
 MainManager::obstacleCheck ()
@@ -766,42 +736,20 @@ MainManager::timerDelete ()
     xTimerDelete (_timer, 1000);
 }
 
-FSM_INITIAL_STATE (MainManager, MainState_initialize)
-
-// ----------------------------------------------------------------------------
-// Helper definition
-//
 void
-onInterval (TimerHandle_t t)
+MainManager::pushStatus (MainStatus status)
+{
+    dpQueue.dispatch (
+        [=] ()
+        {
+            xSemaphoreTake (global::mainstatusMutex, portMAX_DELAY);
+            global::mainstatus = status;
+            xSemaphoreGive (global::mainstatusMutex);
+        });
+}
+
+void
+MainManager::onInterval (TimerHandle_t t)
 {
     sendMainEvent (mainevent_interval {});
-}
-
-void
-mainStatusLoop ()
-{
-    MainStatus currentStatus;
-
-    /*  wait for data to become available in the queue  */
-    if (xQueueReceive (mainstatusQueue, &currentStatus, portMAX_DELAY) == pdFALSE)
-    {
-        return;
-    }
-
-    /* lock mainstatusMutex if it's availabel, if not then wait */
-    if (xSemaphoreTake (global::mainstatusMutex, portMAX_DELAY) == pdFALSE)
-    {
-        return;
-    }
-
-    global::mainstatus = currentStatus;
-
-    /* unlock mainstatusMutex */
-    xSemaphoreGive (global::mainstatusMutex);
-}
-
-inline void
-putMainStatus (MainStatus status)
-{
-    xQueueSend (mainstatusQueue, &status, 0);
 }

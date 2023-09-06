@@ -1,10 +1,5 @@
 #include "nwstatus.task.h"
 
-#include "config.h"
-#include "global.h"
-#include "gpio.h"
-#include "helper.h"
-
 void
 nwStatusTask (void *params)
 {
@@ -13,10 +8,8 @@ nwStatusTask (void *params)
 
     for (;;)
     {
-        NwStatus currentStatus;
-        
         xSemaphoreTake (global::nwstatusMutex, portMAX_DELAY);
-        currentStatus = global::nwstatus;
+        NwStatus currentStatus = global::nwstatus;
         xSemaphoreGive (global::nwstatusMutex);
 
         switch (currentStatus)
@@ -25,24 +18,23 @@ nwStatusTask (void *params)
             digitalWrite (ERR_LED_1, 0);
             break;
         case nwstatus_wifi_not_found:
-            blinkLed (ERR_LED_1, CONF_NWSTATUSTASK_WIFI_CONNECT_BLINKTIMES);
+            blinkLed (ERR_LED_1, constants::networkStatus::wifiConnectBlinkTimes);
             break;
         case nwstatus_wifi_config:
-            blinkLed (ERR_LED_1, CONF_NWSTATUSTASK_WIFI_CONFIG_BLINKTIMES);
+            blinkLed (ERR_LED_1, constants::networkStatus::wifiConfigBlinkTimes);
             break;
         case nwstatus_mqtt_not_found:
-            blinkLed (ERR_LED_1, CONF_NWSTATUSTASK_MQTT_CONNECT_BLINKTIMES);
+            blinkLed (ERR_LED_1, constants::networkStatus::mqttConnectBlinkTimes);
             break;
         case nwstatus_error:
-            static const uint longDelayMs = 500;
             blinkLed (
                 ERR_LED_1,
-                CONF_NWSTATUSTASK_UNDEFINE_ERROR_BLINKTIMES,
-                longDelayMs,
+                constants::networkStatus::undefineErrorBlinkTimes,
+                constants::networkStatus::delayMs,
                 0);
             break;
         }
 
-        vTaskDelay (pdMS_TO_TICKS (CONF_NWSTATUSTASK_DELAY_MS));
+        vTaskDelay (constants::networkStatus::delayMs);
     }
 }

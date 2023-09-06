@@ -8,23 +8,20 @@ Implementing a state machine to manage main actions:
     * ...
 */
 
+#include "ESP32Servo.h"
 #include "PID_v1.h"
-#include "config.h"
 #include "constants.h"
+#include "cppQueue.h"
+#include "dispatchqueue.h"
 #include "global.h"
 #include "gpio.h"
 #include "l298n.h"
 #include "makerline.h"
 #include "network.fsm.h"
 #include "tinyfsm.hpp"
-#include "trigger.h"
 #include "types.h"
 #include <Arduino.h>
-#include "cppQueue.h"
 #include <math.h>
-#include "dispatchqueue.h"
-#include "ESP32Servo.h"
-#include "constants.h"
 
 // ----------------------------------------------------------------------------
 // Event declarations
@@ -39,15 +36,11 @@ struct mainevent_dispatch_act: mainevent {};
 
 // ----------------------------------------------------------------------------
 // MainManager (FSM base class) declaration
-// clang-format on
 //
 
 class MainManager : public tinyfsm::Fsm<MainManager>
 {
   public:
-    MainManager ();
-    ~MainManager ();
-
     /* default reaction for unhandled events */
     void react (tinyfsm::Event const &) {};
 
@@ -85,11 +78,15 @@ class MainManager : public tinyfsm::Fsm<MainManager>
 
     static dispatch_queue dpQueue;
 
-    bool obstacleCheck();
-    void obstacleAction();
+    static void onInterval (TimerHandle_t t);
+
+    bool obstacleCheck ();
+    void obstacleAction ();
 
     void pushAct (ActType act, bool forceExcu = false);
     ActData popAct ();
+
+    void pushStatus (MainStatus status);
 
     void timerInit (TimerCallbackFunction_t, TickType_t, UBaseType_t autoReaload = false);
     void timerStart ();
@@ -110,8 +107,5 @@ sendMainEvent (E const &event)
 {
     MainManagerFSM::dispatch<E> (event);
 }
-
-/* polling this function to perform main status update */
-void mainStatusLoop ();
 
 #endif // MAIN_FSM_H_

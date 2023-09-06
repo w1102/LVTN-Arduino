@@ -11,49 +11,15 @@ namespace constants
         inline constexpr uint8_t intervalMs { pdMS_TO_TICKS (5) };
     }
 
-    namespace task
+    namespace ultrasonic
     {
-        namespace ultrasonic
-        {
-            inline constexpr uint16_t stackDepth { configMINIMAL_STACK_SIZE + 2048 };
-            inline constexpr uint8_t priority { 5 };
-            inline constexpr uint8_t runningCore { ARDUINO_RUNNING_CORE };
-            inline constexpr char name[] { "ultrasonic" };
-        }
+        inline constexpr uint16_t taskStackDepth { configMINIMAL_STACK_SIZE + 2048 };
+        inline constexpr uint8_t taskPriority { 5 };
+        inline constexpr uint8_t taskRunningCore { ARDUINO_RUNNING_CORE };
+        inline constexpr char taskName[] { "ultrasonic" };
 
-        namespace networkStatus
-        {
-            inline constexpr uint16_t stackDepth { configMINIMAL_STACK_SIZE };
-            inline constexpr uint8_t priority { 1 };
-            inline constexpr uint8_t runningCore { ARDUINO_RUNNING_CORE };
-            inline constexpr char name[] { "networkStatus" };
-        }
-
-        namespace main
-        {
-            inline constexpr uint16_t stackDepth { configMINIMAL_STACK_SIZE + 13312 };
-            inline constexpr uint8_t priority { 20 };
-            inline constexpr uint8_t runningCore { 0 };
-            inline constexpr char name[] { "main" };
-        }
-
-        namespace mainStatus
-        {
-            inline constexpr uint16_t stackDepth { configMINIMAL_STACK_SIZE };
-            inline constexpr uint8_t priority { 0 };
-            inline constexpr uint8_t runningCore { ARDUINO_RUNNING_CORE };
-            inline constexpr char name[] { "mainStatus" };
-        }
-    }
-
-    namespace config
-    {
-        namespace ultrasonic
-        {
-            inline constexpr float speedOfSound { 0.034 };
-            inline constexpr float minDistance { 7.0 };
-        }
-
+        inline constexpr float speedOfSound { 0.034 };
+        inline constexpr float minDistance { 7.0 };
     }
 
     namespace network
@@ -82,18 +48,42 @@ namespace constants
 
     }
 
+    namespace networkStatus
+    {
+        inline constexpr uint16_t delayMs {pdMS_TO_TICKS(600)};
+        inline constexpr uint8_t wifiConnectBlinkTimes { 1 };
+        inline constexpr uint8_t wifiConfigBlinkTimes { 2 };
+        inline constexpr uint8_t mqttConnectBlinkTimes { 3 };
+        inline constexpr uint8_t undefineErrorBlinkTimes { 1 };
+
+        inline constexpr uint16_t taskStackDepth { configMINIMAL_STACK_SIZE };
+        inline constexpr uint8_t taskPriority { 1 };
+        inline constexpr uint8_t taskRunningCore { ARDUINO_RUNNING_CORE };
+        inline constexpr char taskName[] { "networkStatus" };
+    }
+
     namespace main
     {
-        inline constexpr uint8_t bypassDelayMs {pdMS_TO_TICKS(35)};
+        inline constexpr double kp {100};
+        inline constexpr double ki {0};
+        inline constexpr double kd {0};
 
-        inline constexpr uint16_t servoDelayMs {pdMS_TO_TICKS(1500)};
-        inline constexpr uint16_t servoUsLow {400};
-        inline constexpr uint16_t servoUsHigh {2400};
-        inline constexpr uint8_t servoPushIn {0};
-        inline constexpr uint8_t servoPushOut {95};
+        inline constexpr uint16_t lowSpeed { 600 };
+        inline constexpr uint16_t midSpeed { 750 };
+        inline constexpr uint16_t higSpeed { 950 };
 
-        inline constexpr uint8_t magnetOn{false};
-        inline constexpr uint8_t magnetOff{true};
+        inline constexpr uint8_t bypassDelayMs { pdMS_TO_TICKS (35) };
+        inline constexpr uint16_t ioDelayMs { pdMS_TO_TICKS (1500) };
+
+        inline constexpr uint16_t servoDelayMs { pdMS_TO_TICKS (10) };
+        inline constexpr uint8_t servoPeriod { 50 };
+        inline constexpr uint16_t servoUsLow { 400 };
+        inline constexpr uint16_t servoUsHigh { 2400 };
+        inline constexpr uint8_t servoPushIn { 0 };
+        inline constexpr uint8_t servoPushOut { 95 };
+
+        inline constexpr uint8_t magnetOn { false };
+        inline constexpr uint8_t magnetOff { true };
 
         inline constexpr uint16_t taskStackDepth { configMINIMAL_STACK_SIZE + 13312 };
         inline constexpr uint8_t taskPriority { 20 };
@@ -103,6 +93,19 @@ namespace constants
         inline constexpr uint16_t dpQueueStackDepth { configMINIMAL_STACK_SIZE + 2048 };
         inline constexpr uint8_t dpQueuethreadCnt { 2 };
         inline constexpr char dpQueueName[] { "MainDpQueue" };
+    }
+
+    namespace mainStatus
+    {
+        inline constexpr uint16_t delayMs {pdMS_TO_TICKS(600)};
+        inline constexpr uint8_t idleBlinkTimes {1};
+        inline constexpr uint8_t runBlinkTimes {2};
+        inline constexpr uint8_t undefineErrorBlinkTimes{1};
+
+        inline constexpr uint16_t taskStackDepth { configMINIMAL_STACK_SIZE };
+        inline constexpr uint8_t taskPriority { 0 };
+        inline constexpr uint8_t taskRunningCore { ARDUINO_RUNNING_CORE };
+        inline constexpr char taskName[] { "mainStatus" };
     }
 
 } // namespace constants

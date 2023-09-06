@@ -3,6 +3,7 @@
 
 /* This file contains the declaration of global variables that can be included, and it can only be included in the main.cpp file */
 
+#include "constants.h"
 #include "map.h"
 #include "mission.h"
 #include "types.h"
@@ -30,7 +31,7 @@ namespace global
     inline QueueHandle_t ultrasonicDistanceQueue;
 
     inline void
-    initMutex ()
+    init ()
     {
         missionSync = xSemaphoreCreateBinary ();
         xSemaphoreGive (missionSync);
@@ -42,10 +43,10 @@ namespace global
         mainstatusMutex = xSemaphoreCreateMutex ();
         storageMapMutex = xSemaphoreCreateMutex ();
 
-        currentLineCountQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
-        missionStatusQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (MissionStatus));
-        missionQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (MissionData));
-        ultrasonicDistanceQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
+        currentLineCountQueue = xQueueCreate (constants::global::queueCnt, sizeof (int));
+        missionStatusQueue = xQueueCreate (constants::global::queueCnt, sizeof (MissionStatus));
+        missionQueue = xQueueCreate (constants::global::queueCnt, sizeof (MissionData));
+        ultrasonicDistanceQueue = xQueueCreate (constants::global::queueCnt, sizeof (int));
     }
 }
 

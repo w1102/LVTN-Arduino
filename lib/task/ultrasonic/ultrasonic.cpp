@@ -20,14 +20,14 @@ ultrasonicTask (void *params)
         delayMicroseconds (30);
 
         duration = pulseIn (SR04_ECHO, HIGH);
-        distance = duration * constants::config::ultrasonic::speedOfSound / 2.0;
+        distance = duration * constants::ultrasonic::speedOfSound / 2.0;
 
-        if (distance < constants::config::ultrasonic::minDistance && !isLocked)
+        if (distance < constants::ultrasonic::minDistance && !isLocked)
         {
             xSemaphoreTake (global::ultrasonicThresholdDistanceSync, portMAX_DELAY);
             isLocked = true;
         }
-        else if (distance > constants::config::ultrasonic::minDistance && isLocked)
+        else if (distance > constants::ultrasonic::minDistance && isLocked)
         {
             xSemaphoreGive (global::ultrasonicThresholdDistanceSync);
             isLocked = false;
