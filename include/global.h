@@ -8,41 +8,45 @@
 #include "types.h"
 #include <Arduino.h>
 
-NwStatus nwstatus = nwstatus_wifi_not_found;
-xSemaphoreHandle nwstatusMutex;
-
-MainStatus mainstatus = mainstatus_initialize;
-xSemaphoreHandle mainstatusMutex;
-
-StorageMap storageMap;
-xSemaphoreHandle storageMapMutex;
-
-QueueHandle_t currentLineCountQueue;
-QueueHandle_t missionStatusQueue;
-QueueHandle_t missionQueue;
-
-xSemaphoreHandle missionSync;
-
-xSemaphoreHandle ultrasonicThresholdDistanceSync;
-QueueHandle_t ultrasonicDistanceQueue;
-
-void
-initMutex ()
+namespace global
 {
-    missionSync = xSemaphoreCreateBinary();
-    xSemaphoreGive(missionSync);
 
-    ultrasonicThresholdDistanceSync = xSemaphoreCreateBinary();
-    xSemaphoreGive(ultrasonicThresholdDistanceSync);
+    inline NwStatus nwstatus = nwstatus_wifi_not_found;
+    inline xSemaphoreHandle nwstatusMutex;
 
-    nwstatusMutex = xSemaphoreCreateMutex();
-    mainstatusMutex = xSemaphoreCreateMutex ();
-    storageMapMutex = xSemaphoreCreateMutex ();
-    
-    currentLineCountQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
-    missionStatusQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionStatus));
-    missionQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionData));
-    ultrasonicDistanceQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(int));
+    inline MainStatus mainstatus = mainstatus_initialize;
+    inline xSemaphoreHandle mainstatusMutex;
+
+    inline StorageMap storageMap;
+    inline xSemaphoreHandle storageMapMutex;
+
+    inline QueueHandle_t currentLineCountQueue;
+    inline QueueHandle_t missionStatusQueue;
+    inline QueueHandle_t missionQueue;
+
+    inline xSemaphoreHandle missionSync;
+
+    inline xSemaphoreHandle ultrasonicThresholdDistanceSync;
+    inline QueueHandle_t ultrasonicDistanceQueue;
+
+    inline void
+    initMutex ()
+    {
+        missionSync = xSemaphoreCreateBinary ();
+        xSemaphoreGive (missionSync);
+
+        ultrasonicThresholdDistanceSync = xSemaphoreCreateBinary ();
+        xSemaphoreGive (ultrasonicThresholdDistanceSync);
+
+        nwstatusMutex = xSemaphoreCreateMutex ();
+        mainstatusMutex = xSemaphoreCreateMutex ();
+        storageMapMutex = xSemaphoreCreateMutex ();
+
+        currentLineCountQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
+        missionStatusQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (MissionStatus));
+        missionQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (MissionData));
+        ultrasonicDistanceQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
+    }
 }
 
 #endif // GLOBAL_H_

@@ -9,6 +9,8 @@ class StorageMap
   public:
     StorageMap();
     bool parseMapMsg(String mapStr);
+    bool parseLineCountMsg(int &lineCount, String& lineCountMsg);
+
  
     MapSize mapSize();
 
@@ -16,7 +18,6 @@ class StorageMap
     int getExportLineCount();
     int getHomeLinecount();
 
-    int parseLineCountMsg(String PosStr);
     String lineCount2mapPosStr(int lineCount);
 
 };

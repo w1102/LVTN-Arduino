@@ -22,6 +22,7 @@ Implementing a state machine to manage main actions:
 #include <cppQueue.h>
 #include <math.h>
 #include "ESP32Servo.h"
+#include "constants.h"
 
 // ----------------------------------------------------------------------------
 // Event declarations

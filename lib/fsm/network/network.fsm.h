@@ -1,36 +1,16 @@
 #ifndef NETWORK_FSM_H_
 #define NETWORK_FSM_H_
 
-/*
-Implementing a state machine to manage WiFi and MQTT connections
-
-Using the `TinyFSM` library to implement a Mealy state machine
-Link: https://github.com/digint/tinyfsm
-
-Using the `Async MQTT` library to implement an asynchronous MQTT client
-Link: https://github.com/marvinroger/async-mqtt-client
-*/
-
-#define NW_CONNECTION_TIMEOUT_IN_MS 3000
-#define NW_MAX_CONNECTION_ATTEMPTS 3
-
-#define NW_MQTT_HOST "mqtt.tranquang.net"
-#define NW_MQTT_PORT 1883
-#define NW_MQTT_USERNAME "quang"
-#define NW_MQTT_PASSWORD "1102"
-
-#define NW_MQTT_TOPIC_QOS 0
-#define NW_MQTT_TOPICNAME_MAP "quang/logistics/map"
-#define NW_MQTT_TOPICNAME_BOTLOCATION "quang/logistics/botlocation"
-#define NW_MQTT_TOPICNAME_MISSION "quang/logistics/mission"
-
+#include "AsyncMqttClient.h"
+#include "WiFi.h"
+#include "constants.h"
+#include "dispatchqueue.h"
 #include "eepromrw.h"
+#include "global.h"
 #include "gpio.h"
-#include "helper.h"
 #include "main.fsm.h"
 #include "tinyfsm.hpp"
 #include <Arduino.h>
-#include "trigger.h"
 
 // ----------------------------------------------------------------------------
 // Event declarations
@@ -78,7 +58,6 @@ class NetworkManager : public tinyfsm::Fsm<NetworkManager>
     /* react events in some states */
     virtual void react (nwevent_timeout const &) {};
     virtual void react (nwevent_wifi_connected const &) {};
-    // virtual void react(nwevent_sc_got_credentials const &) {};
     virtual void react (nwevent_sc_done const &) {};
     virtual void react (nwevent_mqtt_disconnected const &) {};
     virtual void react (nwevent_mqtt_connected const &) {};
@@ -96,12 +75,24 @@ class NetworkManager : public tinyfsm::Fsm<NetworkManager>
     TimerHandle_t _timer;
 
   protected:
-    void timerInit (
-        TimerCallbackFunction_t cb,
-        TickType_t period = pdMS_TO_TICKS (NW_CONNECTION_TIMEOUT_IN_MS));
+    static AsyncMqttClient MQTT;
+    static SemaphoreHandle_t retainSyncMsg;
+    static dispatch_queue dpQueue;
+
+    static void onTimeout (TimerHandle_t xTimer);
+    static void onWiFiEvent (WiFiEvent_t event, arduino_event_info_t eventInfo);
+    static void onMqttConnect (bool sessionPresent);
+    static void onMqttDisconnect (AsyncMqttClientDisconnectReason reason);
+    static void onMqttSubscribe (uint16_t packetId, uint8_t qos);
+    static void onMqttPublish (uint16_t packetId);
+    static void onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total);
+
+    void timerInit (TickType_t period = constants::network::connectTimeoutMs);
     void timerStart ();
     void timerStop ();
     void timerDelete ();
+
+    void pushStatus (NwStatus status);
 };
 
 using NetworkManagerFSM = tinyfsm::Fsm<NetworkManager>;
@@ -110,15 +101,12 @@ using NetworkManagerFSM = tinyfsm::Fsm<NetworkManager>;
 // helper declaration
 //
 
-/* send a network event into NetworkManager state machine */
+/* Send a network event into NetworkManager state machine */
 template <typename E>
 void
 sendNwEvent (E const &event)
 {
     NetworkManagerFSM::dispatch<E> (event);
 }
-
-/* polling this function to perform network status update */
-void nwStatusLoop ();
 
 #endif // NETWORK_FSM_H_

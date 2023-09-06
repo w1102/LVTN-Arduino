@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include "config.h"
+#include "constants.h"
 #include "eepromrw.h"
 #include "global.h"
 #include "main.task.h"
@@ -12,38 +13,37 @@ setup ()
 {
     Serial.begin (115200);
 
-    initMutex ();
+    global::initMutex ();
     eepromInit ();
-    // eepromClean();
 
     xTaskCreatePinnedToCore (
-        networkTask,            // Function that should be called
-        CONF_NWSTASK_NAME,      // Name of the task (for debugging)
-        CONF_NWTASK_STACK_SIZE, // Stack size (bytes)
-        NULL,                   // Parameter to pass
-        CONF_NWTASK_PRIORITY,   // Task priority
-        NULL,                   // Task handle
-        CONF_NWTASK_RUN_CORE    // Run on core
+        networkTask,                        // Function that should be called
+        constants::network::taskName,       // Name of the task (for debugging)
+        constants::network::taskStackDepth, // Stack size (bytes)
+        NULL,                               // Parameter to pass
+        constants::network::taskPriority,   // Task priority
+        NULL,                               // Task handle
+        constants::network::taskRunningCore // Run on core
     );
 
     xTaskCreatePinnedToCore (
-        mainTask,                 // Function that should be called
-        CONF_MAINTASK_NAME,       // Name of the task (for debugging)
-        CONF_MAINTASK_STACK_SIZE, // Stack size (bytes)
-        NULL,                     // Parameter to pass
-        CONF_MAINTASK_PRIORITY,   // Task priority
-        NULL,                     // Task handle
-        CONF_MAINTASK_RUN_CORE    // Run on core
+        mainTask,                          // Function that should be called
+        constants::task::main::name,       // Name of the task (for debugging)
+        constants::task::main::stackDepth, // Stack size (bytes)
+        NULL,                              // Parameter to pass
+        constants::task::main::priority,   // Task priority
+        NULL,                              // Task handle
+        constants::task::main::runningCore // Run on core
     );
 
     xTaskCreatePinnedToCore (
-        ultrasonicTask,                 // Function that should be called
-        CONF_ULTRASONICTASK_NAME,       // Name of the task (for debugging)
-        CONF_ULTRASONICTASK_STACK_SIZE, // Stack size (bytes)
-        NULL,                           // Parameter to pass
-        CONF_ULTRASONICTASK_PRIORITY,   // Task priority
-        NULL,                           // Task handle
-        CONF_ULTRASONICTASK_RUN_CORE    // Run on core
+        ultrasonicTask,                          // Function that should be called
+        constants::task::ultrasonic::name,       // Name of the task (for debugging)
+        constants::task::ultrasonic::stackDepth, // Stack size (bytes)
+        NULL,                                    // Parameter to pass
+        constants::task::ultrasonic::priority,   // Task priority
+        NULL,                                    // Task handle
+        constants::task::ultrasonic::runningCore // Run on core
     );
 }
 

@@ -1,7 +1,7 @@
 #include "map.h"
 #include <ArduinoJson.h>
 
-DynamicJsonDocument mapObj(6200);
+DynamicJsonDocument mapMsgObj(6200);
 
 StorageMap::StorageMap()
 {
@@ -9,7 +9,7 @@ StorageMap::StorageMap()
 
 bool StorageMap::parseMapMsg(String mapStr)
 {
-    DeserializationError error = deserializeJson(mapObj, mapStr);
+    DeserializationError error = deserializeJson(mapMsgObj, mapStr);
 
     if (error)
     {
@@ -24,29 +24,27 @@ bool StorageMap::parseMapMsg(String mapStr)
 MapSize StorageMap::mapSize()
 {
     MapSize size;
-    size.width = mapObj["size"]["width"];
-    size.height = mapObj["size"]["height"];
+    size.width = mapMsgObj["size"]["width"];
+    size.height = mapMsgObj["size"]["height"];
 
     return size;
 }
 
-int StorageMap::parseLineCountMsg(String PosStr)
+bool StorageMap::parseLineCountMsg(int &lineCount, String& lineCountMsg)
 {
-    DynamicJsonDocument posObj(1024);
-    DeserializationError error = deserializeJson(posObj, PosStr);
+    DynamicJsonDocument lineCountMsgObj(256);
+    DeserializationError error = deserializeJson(lineCountMsgObj, lineCountMsg);
 
     if (error)
     {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.c_str());
+        lineCountMsgObj.clear();
         return false;
     }
 
-    int posX = posObj["x"];
-    int posY = posObj["y"];
-    int lineCount = 0;
+    int posX = lineCountMsgObj["x"];
+    int posY = lineCountMsgObj["y"];
 
-    JsonArray nodes = mapObj["nodes"];
+    JsonArray nodes = mapMsgObj["nodes"];
     for (JsonObject node : nodes)
     {
         JsonObject point = node["point"];
@@ -63,8 +61,8 @@ int StorageMap::parseLineCountMsg(String PosStr)
         }
     }
 
-    posObj.clear();
-    return lineCount;
+    lineCountMsgObj.clear();
+    return true;
 }
 
 int StorageMap::getImportLineCount()
@@ -73,7 +71,7 @@ int StorageMap::getImportLineCount()
 
     int lineCount = 0;
 
-    JsonArray nodes = mapObj["nodes"];
+    JsonArray nodes = mapMsgObj["nodes"];
     for (JsonObject node : nodes)
     {
         String role = node["role"];
@@ -94,7 +92,7 @@ int StorageMap::getExportLineCount()
 
     int lineCount = 0;
 
-    JsonArray nodes = mapObj["nodes"];
+    JsonArray nodes = mapMsgObj["nodes"];
     for (JsonObject node : nodes)
     {
         String role = node["role"];
@@ -118,7 +116,7 @@ String StorageMap::lineCount2mapPosStr(int lineCount)
 {
     String mapPosStr = "";
 
-    JsonArray nodes = mapObj["nodes"];
+    JsonArray nodes = mapMsgObj["nodes"];
     for (JsonObject node : nodes)
     {
         JsonObject data = node["data"];
