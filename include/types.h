@@ -1,8 +1,8 @@
 #ifndef TYPES_H_
 #define TYPES_H_
 
-#include <Arduino.h>
 #include "cppQueue.h"
+#include <Arduino.h>
 
 typedef enum
 {
@@ -21,10 +21,19 @@ typedef enum
     mainstatus_error
 } MainStatus;
 
-typedef enum {
-    forward,
+typedef enum
+{
+    forward = 0,
     reward
 } Direction;
+
+typedef struct
+{
+    String *id, *leaveHomeActs, *forwardDirHomingActs, *rewardDirHomingActs;
+    Direction direction;
+    int currentLineCount;
+    bool isHome, isMainBranch, isItemPicked;
+} AGVInfo;
 
 typedef enum
 {
@@ -34,9 +43,7 @@ typedef enum
     act_turnBack,
     act_bypass,
     act_io,
-    act_done_origi,
-    act_done_incre,
-    act_done_decre
+    act_done
 } ActType;
 
 typedef struct
@@ -59,23 +66,25 @@ typedef enum
     exportMission
 } MissionType;
 
-
-typedef enum {
+typedef enum
+{
     phase1,
-    phase2,
-    phase3,
+    phase2
 } MissionPhase;
 
-
-typedef struct {
+typedef struct
+{
     int target;
     String *action;
 } MissionPhaseData;
 
-typedef struct {
+typedef struct
+{
     MissionPhaseData phase1;
     MissionPhaseData phase2;
     bool stopInMainBranch;
+    MissionPhase currentPhase;
+    bool isHomingMission;
 } MissionData;
 
 typedef struct

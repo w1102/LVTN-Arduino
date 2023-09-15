@@ -18,17 +18,19 @@ namespace global
     inline MainStatus mainstatus = mainstatus_initialize;
     inline xSemaphoreHandle mainstatusMutex;
 
-    inline StorageMap storageMap;
-    inline xSemaphoreHandle storageMapMutex;
+    inline Map map;
+    inline xSemaphoreHandle mapMutex;
 
+    inline QueueHandle_t agvInfoQueue;
     inline QueueHandle_t currentLineCountQueue;
     inline QueueHandle_t missionStatusQueue;
     inline QueueHandle_t missionQueue;
 
     inline xSemaphoreHandle missionSync;
 
-    inline xSemaphoreHandle ultrasonicThresholdDistanceSync;
-    inline QueueHandle_t ultrasonicDistanceQueue;
+    inline xSemaphoreHandle ultrasonicDistanceStopsync;
+    inline xSemaphoreHandle ultrasonicDistanceMutex;
+    inline float ultrasonicDistance;
 
     inline void
     init ()
@@ -36,17 +38,18 @@ namespace global
         missionSync = xSemaphoreCreateBinary ();
         xSemaphoreGive (missionSync);
 
-        ultrasonicThresholdDistanceSync = xSemaphoreCreateBinary ();
-        xSemaphoreGive (ultrasonicThresholdDistanceSync);
+        ultrasonicDistanceStopsync = xSemaphoreCreateBinary ();
+        xSemaphoreGive(ultrasonicDistanceStopsync);
 
+        ultrasonicDistanceMutex = xSemaphoreCreateMutex ();
         nwstatusMutex = xSemaphoreCreateMutex ();
         mainstatusMutex = xSemaphoreCreateMutex ();
-        storageMapMutex = xSemaphoreCreateMutex ();
+        mapMutex = xSemaphoreCreateMutex ();
 
+        agvInfoQueue = xQueueCreate(constants::global::queueCnt, sizeof(AGVInfo));
         currentLineCountQueue = xQueueCreate (constants::global::queueCnt, sizeof (int));
         missionStatusQueue = xQueueCreate (constants::global::queueCnt, sizeof (MissionStatus));
-        missionQueue = xQueueCreate (constants::global::queueCnt, sizeof (MissionData));
-        ultrasonicDistanceQueue = xQueueCreate (constants::global::queueCnt, sizeof (int));
+        missionQueue = xQueueCreate (constants::global::queueCnt, sizeof (Mission));
     }
 }
 

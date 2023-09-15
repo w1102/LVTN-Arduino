@@ -2,7 +2,7 @@
 
 #include "config.h"
 #include "constants.h"
-#include "eepromrw.h"
+#include "eeprommanager.h"
 #include "global.h"
 #include "main.task.h"
 #include "mainstatus.task.h"
@@ -10,13 +10,15 @@
 #include "nwstatus.task.h"
 #include "ultrasonic.h"
 
+#include <ArduinoOTA.h>
+
 void
 setup ()
 {
     Serial.begin (115200);
 
     global::init ();
-    eepromInit ();
+    eeprom::init ();
 
     xTaskCreatePinnedToCore (
         networkTask,                        // Function that should be called
@@ -29,12 +31,12 @@ setup ()
     );
 
     xTaskCreatePinnedToCore (
-        nwStatusTask,                        // Function that should be called
+        nwStatusTask,                             // Function that should be called
         constants::networkStatus::taskName,       // Name of the task (for debugging)
         constants::networkStatus::taskStackDepth, // Stack size (bytes)
-        NULL,                               // Parameter to pass
+        NULL,                                     // Parameter to pass
         constants::networkStatus::taskPriority,   // Task priority
-        NULL,                               // Task handle
+        NULL,                                     // Task handle
         constants::networkStatus::taskRunningCore // Run on core
     );
 

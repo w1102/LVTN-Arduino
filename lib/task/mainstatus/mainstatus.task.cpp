@@ -17,6 +17,7 @@ mainStatusTask (void *params)
         switch (currentStatus)
         {
         case MainStatus::mainstatus_initialize:
+            blinkLed (ERR_LED_3, constants::mainStatus::initBlinkTimes);
             break;
         case MainStatus::mainstatus_idle:
             blinkLed (RUN_LED, constants::mainStatus::idleBlinkTimes);

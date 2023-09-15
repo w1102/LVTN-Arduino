@@ -1,5 +1,4 @@
 #include "network.fsm.h"
-// #include "global.extern.h"
 
 // ----------------------------------------------------------------------------
 // Forward declarations
@@ -50,7 +49,7 @@ class NwState_connectWiFi : public NetworkManager
     void
     entry () override
     {
-        eepromReadWifiCredentials (ssid, pswd);
+        eeprom::readWifiCredentials (ssid, pswd);
 
         WiFi.mode (WIFI_STA);
         WiFi.begin (ssid.c_str (), pswd.c_str ());
@@ -115,7 +114,7 @@ class NwState_configWiFi : public NetworkManager
             [=] ()
             {
                 pushStatus (nwstatus_mqtt_not_found);
-                eepromSaveWifiCredentials (WiFi.SSID (), WiFi.psk ());
+                eeprom::saveWifiCredentials (WiFi.SSID (), WiFi.psk ());
             });
     }
 };
@@ -173,7 +172,7 @@ class NwState_subscribeMqtt : public NetworkManager
         xSemaphoreTake (retainSyncMsg, portMAX_DELAY);
 
         MQTT.subscribe (constants::network::mqttMapTopic, constants::network::mqttQos);
-        MQTT.subscribe (constants::network::mqttLocationTopic, constants::network::mqttQos);
+        MQTT.subscribe (constants::network::mqttAgvInfoTopic, constants::network::mqttQos);
         MQTT.subscribe (constants::network::mqttMissionTopic, constants::network::mqttQos);
     }
 
@@ -188,43 +187,39 @@ class NwState_subscribeMqtt : public NetworkManager
         }
         else
         {
-            String cpyMapMsg = String (mapMsg);
+            String cpyMapMsg (mapMsg);
             mapMsg.clear ();
 
             dpQueue.dispatch (
                 [=] () mutable
                 {
-                    xSemaphoreTake (global::storageMapMutex, portMAX_DELAY);
-                    global::storageMap.parseMapMsg (cpyMapMsg) && xSemaphoreGive (retainSyncMsg);
-                    xSemaphoreGive (global::storageMapMutex);
+                    xSemaphoreTake (global::mapMutex, portMAX_DELAY);
+                    global::map.parseMapMsg (cpyMapMsg) && xSemaphoreGive (retainSyncMsg);
+                    xSemaphoreGive (global::mapMutex);
                 });
         }
     }
 
     void
-    react (nwevent_mqtt_msg_lineCount const &e) override
+    react (nwevent_mqtt_msg_agvInfo const &e) override
     {
-        String locationMsg = String (e.payload, e.len);
+        String agvInfoMsg (e.payload, e.len);
 
         dpQueue.dispatch (
-            [=, isValidLineCount { false }, lineCount { 0 }] () mutable
+            [&, agvInfoMsg] () mutable
             {
-                xSemaphoreTake (retainSyncMsg, portMAX_DELAY);
-                xSemaphoreGive (retainSyncMsg);
+                xSemaphoreTake (retainSyncMsg, portMAX_DELAY) && xSemaphoreGive (retainSyncMsg);
 
-                xSemaphoreTake (global::storageMapMutex, portMAX_DELAY);
-                isValidLineCount = global::storageMap.parseLineCountMsg (lineCount, locationMsg);
-                xSemaphoreGive (global::storageMapMutex);
-
-                if (isValidLineCount)
-                {
-                    xQueueSend (global::currentLineCountQueue, &lineCount, portMAX_DELAY);
-                    transit<NwState_idle> (
-                        [=] ()
-                        {
-                            pushStatus (nwstatus_good);
-                        });
-                }
+                transit<NwState_idle> (
+                    [=] () mutable
+                    {
+                        xQueueSend (global::agvInfoQueue, &agvInfo, portMAX_DELAY);
+                        pushStatus (nwstatus_good);
+                    },
+                    [&, agvInfoMsg] () mutable
+                    {
+                        return Map::parseAgvInfo (agvInfo, agvInfoMsg);
+                    });
             });
     }
 
@@ -239,7 +234,8 @@ class NwState_subscribeMqtt : public NetworkManager
     }
 
   private:
-    String mapMsg = "";
+    String mapMsg;
+    AGVInfo agvInfo;
 };
 
 class NwState_idle : public NetworkManager
@@ -273,9 +269,9 @@ class NwState_idle : public NetworkManager
         String missionMsg = String (e.payload, e.len);
 
         dpQueue.dispatch (
-            [=, mission { MissionData {} }, tasking { MissionStatus::missionstatus_taking }] () mutable
+            [=, mission { Mission() } , tasking { MissionStatus::missionstatus_taking }] () mutable
             {
-                if (parseMissionMsg (mission, missionMsg))
+                if (Mission::parseMissionMsg (mission, missionMsg))
                 {
                     xQueueSend (global::missionStatusQueue, &tasking, portMAX_DELAY);
                     xQueueSend (global::missionQueue, &mission, portMAX_DELAY);
@@ -289,8 +285,22 @@ class NwState_idle : public NetworkManager
         MissionStatus missionStatus;
         if (xQueueReceive (global::missionStatusQueue, &missionStatus, 0) == pdTRUE)
         {
-            // Serial.printf ("tracking: %d\n", missionStatus);
+            // send mission info
         }
+
+        AGVInfo agvInfo;
+        if (xQueueReceive (global::agvInfoQueue, &agvInfo, 0) == pdTRUE)
+        {
+            String agvInfoSerialized;
+            Map::parseAgvInfoToString (agvInfo, agvInfoSerialized);
+
+            MQTT.publish (
+                "quang/test",
+                constants::network::mqttQos,
+                true, agvInfoSerialized.c_str (),
+                agvInfoSerialized.length ());
+        }
+
         timerStart ();
     }
 };
@@ -463,9 +473,9 @@ NetworkManager::onMqttMessage (char *topic, char *payload, AsyncMqttClientMessag
     }
 
     /* handle retain location */
-    if (strcmp (constants::network::mqttLocationTopic, topic) == 0)
+    if (strcmp (constants::network::mqttAgvInfoTopic, topic) == 0)
     {
-        sendNwEvent (nwevent_mqtt_msg_lineCount { retainEvent });
+        sendNwEvent (nwevent_mqtt_msg_agvInfo { retainEvent });
         return;
     }
 }

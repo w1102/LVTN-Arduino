@@ -5,12 +5,16 @@
 #include "WiFi.h"
 #include "constants.h"
 #include "dispatchqueue.h"
-#include "eepromrw.h"
+#include "eeprommanager.h"
 #include "global.h"
 #include "gpio.h"
 #include "main.fsm.h"
+#include "map.h"
+#include "mission.h"
 #include "tinyfsm.hpp"
 #include <Arduino.h>
+#include <ArduinoOTA.h>
+#include <ESPmDNS.h>
 
 // ----------------------------------------------------------------------------
 // Event declarations
@@ -35,7 +39,7 @@ struct nwevent_mqtt_msg: nwevent {
 };
 
 struct nwevent_mqtt_msg_map: nwevent_mqtt_msg {};
-struct nwevent_mqtt_msg_lineCount: nwevent_mqtt_msg {};
+struct nwevent_mqtt_msg_agvInfo: nwevent_mqtt_msg {};
 struct nwevent_mqtt_msg_mission: nwevent_mqtt_msg {};
 
 
@@ -62,7 +66,7 @@ class NetworkManager : public tinyfsm::Fsm<NetworkManager>
     virtual void react (nwevent_mqtt_disconnected const &) {};
     virtual void react (nwevent_mqtt_connected const &) {};
     virtual void react (nwevent_mqtt_msg_map const &) {};
-    virtual void react (nwevent_mqtt_msg_lineCount const &) {};
+    virtual void react (nwevent_mqtt_msg_agvInfo const &) {};
     virtual void react (nwevent_mqtt_msg_mission const &) {};
 
     /* entry actions in some states */

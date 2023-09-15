@@ -10,6 +10,7 @@ Implementing a state machine to manage main actions:
 
 #include "ESP32Servo.h"
 #include "PID_v1.h"
+#include "action.h"
 #include "constants.h"
 #include "cppQueue.h"
 #include "dispatchqueue.h"
@@ -17,11 +18,13 @@ Implementing a state machine to manage main actions:
 #include "gpio.h"
 #include "l298n.h"
 #include "makerline.h"
+#include "mission.h"
 #include "network.fsm.h"
 #include "tinyfsm.hpp"
 #include "types.h"
 #include <Arduino.h>
 #include <math.h>
+#include <string.h>
 
 // ----------------------------------------------------------------------------
 // Event declarations
@@ -33,6 +36,7 @@ struct mainevent : tinyfsm::Event {};
 struct mainevent_interval: mainevent {};
 
 struct mainevent_dispatch_act: mainevent {};
+struct mainevent_move: mainevent {};
 
 // ----------------------------------------------------------------------------
 // MainManager (FSM base class) declaration
@@ -47,6 +51,7 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     /* react events in some states */
     virtual void react (mainevent_interval const &) {};
     virtual void react (mainevent_dispatch_act const &) {};
+    virtual void react (mainevent_move const &) {};
 
     /* entry actions in some states */
     virtual void entry (void) {};
@@ -58,36 +63,21 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     TimerHandle_t _timer;
 
   protected:
-    static L298N *lhsMotor;
-    static L298N *rhsMotor;
-    static MakerLine *makerLine;
-    static Servo *servo;
-    static int targetLineCount;
-    static int currentLineCount;
-    static bool itemPicked;
+    static L298N lhsMotor, rhsMotor;
+    static MakerLine makerLine;
+    static Servo servo;
+    
+    static AGVInfo agvInfo;
 
-    static bool homing;
-    static bool isHome;
-
-    static bool isMainBranch;
-    static Direction robotDir;
-
-    static cppQueue actQueue;
-    static MissionData mission;
-    static MissionPhase currentPhase;
+    static Mission mission;
 
     static dispatch_queue dpQueue;
 
     static void onInterval (TimerHandle_t t);
-
-    bool obstacleCheck ();
-    void obstacleAction ();
-
-    void pushAct (ActType act, bool forceExcu = false);
-    ActData popAct ();
+    static bool isHaveForceAction();
 
     void pushStatus (MainStatus status);
-
+    void stopAgv();
     void timerInit (TimerCallbackFunction_t, TickType_t, UBaseType_t autoReaload = false);
     void timerStart ();
     void timerStop ();
@@ -103,8 +93,11 @@ using MainManagerFSM = tinyfsm::Fsm<MainManager>;
 /* send a main event into MainManager state machine */
 template <typename E>
 void
-sendMainEvent (E const &event)
+sendMainEvent (E const &event, bool condition = true)
 {
+  if (condition == false) {
+    return;
+  }
     MainManagerFSM::dispatch<E> (event);
 }
 
