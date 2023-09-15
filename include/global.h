@@ -3,46 +3,54 @@
 
 /* This file contains the declaration of global variables that can be included, and it can only be included in the main.cpp file */
 
+#include "constants.h"
 #include "map.h"
 #include "mission.h"
 #include "types.h"
 #include <Arduino.h>
 
-NwStatus nwstatus = nwstatus_wifi_not_found;
-xSemaphoreHandle nwstatusMutex;
-
-MainStatus mainstatus = mainstatus_initialize;
-xSemaphoreHandle mainstatusMutex;
-
-StorageMap storageMap;
-xSemaphoreHandle storageMapMutex;
-
-QueueHandle_t currentLineCountQueue;
-QueueHandle_t missionStatusQueue;
-QueueHandle_t missionQueue;
-
-xSemaphoreHandle missionSync;
-
-xSemaphoreHandle ultrasonicThresholdDistanceSync;
-QueueHandle_t ultrasonicDistanceQueue;
-
-void
-initMutex ()
+namespace global
 {
-    missionSync = xSemaphoreCreateBinary();
-    xSemaphoreGive(missionSync);
 
-    ultrasonicThresholdDistanceSync = xSemaphoreCreateBinary();
-    xSemaphoreGive(ultrasonicThresholdDistanceSync);
+    inline NwStatus nwstatus = nwstatus_wifi_not_found;
+    inline xSemaphoreHandle nwstatusMutex;
 
-    nwstatusMutex = xSemaphoreCreateMutex();
-    mainstatusMutex = xSemaphoreCreateMutex ();
-    storageMapMutex = xSemaphoreCreateMutex ();
-    
-    currentLineCountQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (int));
-    missionStatusQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionStatus));
-    missionQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(MissionData));
-    ultrasonicDistanceQueue = xQueueCreate(CONF_GLO_QUEUE_LENGTH, sizeof(int));
+    inline MainStatus mainstatus = mainstatus_initialize;
+    inline xSemaphoreHandle mainstatusMutex;
+
+    inline Map map;
+    inline xSemaphoreHandle mapMutex;
+
+    inline QueueHandle_t agvInfoQueue;
+    inline QueueHandle_t currentLineCountQueue;
+    inline QueueHandle_t missionStatusQueue;
+    inline QueueHandle_t missionQueue;
+
+    inline xSemaphoreHandle missionSync;
+
+    inline xSemaphoreHandle ultrasonicDistanceStopsync;
+    inline xSemaphoreHandle ultrasonicDistanceMutex;
+    inline float ultrasonicDistance;
+
+    inline void
+    init ()
+    {
+        missionSync = xSemaphoreCreateBinary ();
+        xSemaphoreGive (missionSync);
+
+        ultrasonicDistanceStopsync = xSemaphoreCreateBinary ();
+        xSemaphoreGive(ultrasonicDistanceStopsync);
+
+        ultrasonicDistanceMutex = xSemaphoreCreateMutex ();
+        nwstatusMutex = xSemaphoreCreateMutex ();
+        mainstatusMutex = xSemaphoreCreateMutex ();
+        mapMutex = xSemaphoreCreateMutex ();
+
+        agvInfoQueue = xQueueCreate(constants::global::queueCnt, sizeof(AGVInfo));
+        currentLineCountQueue = xQueueCreate (constants::global::queueCnt, sizeof (int));
+        missionStatusQueue = xQueueCreate (constants::global::queueCnt, sizeof (MissionStatus));
+        missionQueue = xQueueCreate (constants::global::queueCnt, sizeof (Mission));
+    }
 }
 
 #endif // GLOBAL_H_

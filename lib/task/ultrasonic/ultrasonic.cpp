@@ -8,7 +8,7 @@ ultrasonicTask (void *params)
     pinMode (SR04_ECHO, INPUT);
 
     float duration, distance;
-    bool semaphoreTaked = false;
+    bool isLocked = false;
 
     for (;;)
     {
@@ -20,21 +20,23 @@ ultrasonicTask (void *params)
         delayMicroseconds (30);
 
         duration = pulseIn (SR04_ECHO, HIGH);
-        distance = duration * CONF_ULTRASONICTASK_SPEED_OF_SOUND / 2;
+        distance = duration * constants::ultrasonic::speedOfSound / 2.0;
 
-        //xQueueSend(ultrasonicDistanceQueue, &distance, 0);
+        xSemaphoreTake (global::ultrasonicDistanceMutex, portMAX_DELAY);
+        global::ultrasonicDistance = distance;
+        xSemaphoreGive (global::ultrasonicDistanceMutex);
 
-        if (distance < CONF_ULTRASONICTASK_MIN_DISTANCE && !semaphoreTaked)
+        if (distance < constants::ultrasonic::stopDistance && !isLocked)
         {
-            xSemaphoreTake (ultrasonicThresholdDistanceSync, portMAX_DELAY);
-            semaphoreTaked = true;
+            xSemaphoreTake (global::ultrasonicDistanceStopsync, portMAX_DELAY);
+            isLocked = true;
         }
-        else if (distance > CONF_ULTRASONICTASK_MIN_DISTANCE && semaphoreTaked)
+        else if (distance > constants::ultrasonic::stopDistance && isLocked)
         {
-            xSemaphoreGive (ultrasonicThresholdDistanceSync);
-            semaphoreTaked = false;
+            xSemaphoreGive (global::ultrasonicDistanceStopsync);
+            isLocked = false;
         }
 
-        vTaskDelay (pdMS_TO_TICKS (CONF_ULTRASONICTASK_INTERVAL));
+        vTaskDelay (constants::global::intervalMs);
     }
 }

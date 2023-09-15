@@ -1,20 +1,9 @@
 #include "network.fsm.h"
-#include "AsyncMqttClient.h"
-#include "WiFi.h"
-#include "global.extern.h"
-/*
 
 // ----------------------------------------------------------------------------
-// prototype declarations
-// clang-format off
+// Forward declarations
 //
 
-/* global variable declarations */
-AsyncMqttClient MQTT;
-QueueHandle_t nwstatusQueue;
-SemaphoreHandle_t missionSyncMsg;
-
-/* forward state declarations */
 class NwState_initialize;
 class NwState_connectWiFi;
 class NwState_configWiFi;
@@ -23,23 +12,8 @@ class NwState_subscribeMqtt;
 class NwState_idle;
 class NwState_error;
 
-/* callback declarations */
-void onTimeout (TimerHandle_t xTimer);
-void onWiFiEvent (WiFiEvent_t event, arduino_event_info_t eventInfo);
-void onMqttConnect (bool sessionPresent);
-void onMqttDisconnect (AsyncMqttClientDisconnectReason reason);
-void onMqttSubscribe (uint16_t packetId, uint8_t qos);
-void onMqttPublish (uint16_t packetId);
-void onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total);
-
-/* helper declarations */
-
-/* put network status into queue */
-inline void putNwStatus (NwStatus status);
-
 // ----------------------------------------------------------------------------
-// State: NwState_initialize
-// clang-format on
+// State implementations
 //
 
 class NwState_initialize : public NetworkManager
@@ -48,13 +22,12 @@ class NwState_initialize : public NetworkManager
     void
     entry () override
     {
-        nwstatusQueue = xQueueCreate (CONF_GLO_QUEUE_LENGTH, sizeof (NwStatus));
+        retainSyncMsg = xSemaphoreCreateBinary ();
+        xSemaphoreGive (retainSyncMsg);
 
-        missionSyncMsg = xSemaphoreCreateBinary ();
-        xSemaphoreGive (missionSyncMsg);
+        MQTT.setServer (constants::network::mqttHost, constants::network::mqttPort);
+        MQTT.setCredentials (constants::network::mqttUsername, constants::network::mqttPassword);
 
-        MQTT.setServer (NW_MQTT_HOST, NW_MQTT_PORT);
-        MQTT.setCredentials (NW_MQTT_USERNAME, NW_MQTT_PASSWORD);
         MQTT.onConnect (onMqttConnect);
         MQTT.onDisconnect (onMqttDisconnect);
         MQTT.onSubscribe (onMqttSubscribe);
@@ -65,15 +38,10 @@ class NwState_initialize : public NetworkManager
         transit<NwState_connectWiFi> (
             [=] ()
             {
-                Serial.println ("connect wifi");
-                putNwStatus (nwstatus_wifi_not_found);
+                pushStatus (nwstatus_wifi_not_found);
             });
     }
 };
-
-// ----------------------------------------------------------------------------
-// State: NwState_connectWiFi
-//
 
 class NwState_connectWiFi : public NetworkManager
 {
@@ -81,12 +49,12 @@ class NwState_connectWiFi : public NetworkManager
     void
     entry () override
     {
-        eepromReadWifiCredentials (ssid, pswd);
+        eeprom::readWifiCredentials (ssid, pswd);
 
         WiFi.mode (WIFI_STA);
         WiFi.begin (ssid.c_str (), pswd.c_str ());
 
-        timerInit (onTimeout);
+        timerInit ();
         timerStart ();
     }
 
@@ -98,7 +66,7 @@ class NwState_connectWiFi : public NetworkManager
     void
     react (nwevent_timeout const &) override
     {
-        if (++connectionAttempts < NW_MAX_CONNECTION_ATTEMPTS)
+        if (++connectionAttempts < constants::network::maxConnectionAttempts)
         {
             WiFi.mode (WIFI_STA);
             WiFi.begin (ssid.c_str (), pswd.c_str ());
@@ -109,8 +77,7 @@ class NwState_connectWiFi : public NetworkManager
             transit<NwState_configWiFi> (
                 [=]
                 {
-                    Serial.println ("config wifi");
-                    putNwStatus (nwstatus_wifi_config);
+                    pushStatus (nwstatus_wifi_config);
                 });
         }
     }
@@ -120,17 +87,15 @@ class NwState_connectWiFi : public NetworkManager
     {
         transit<NwState_connectMqtt> (
             [=] ()
-            { putNwStatus (nwstatus_mqtt_not_found); });
+            {
+                pushStatus (nwstatus_mqtt_not_found);
+            });
     }
 
   private:
     String ssid, pswd;
-    uint connectionAttempts = 0;
+    uint connectionAttempts { 0 };
 };
-
-// ----------------------------------------------------------------------------
-// State: NwState_configWiFi
-//
 
 class NwState_configWiFi : public NetworkManager
 {
@@ -148,15 +113,11 @@ class NwState_configWiFi : public NetworkManager
         transit<NwState_connectMqtt> (
             [=] ()
             {
-                putNwStatus (nwstatus_mqtt_not_found);
-                eepromSaveWifiCredentials (WiFi.SSID (), WiFi.psk ());
+                pushStatus (nwstatus_mqtt_not_found);
+                eeprom::saveWifiCredentials (WiFi.SSID (), WiFi.psk ());
             });
     }
 };
-
-// ----------------------------------------------------------------------------
-// State: NwState_connectMqtt
-//
 
 class NwState_connectMqtt : public NetworkManager
 {
@@ -164,9 +125,8 @@ class NwState_connectMqtt : public NetworkManager
     void
     entry () override
     {
-        timerInit (onTimeout);
-
         MQTT.connect ();
+        timerInit ();
         timerStart ();
     }
 
@@ -179,7 +139,7 @@ class NwState_connectMqtt : public NetworkManager
     void
     react (nwevent_timeout const &) override
     {
-        if (++connectionAttempts < NW_MAX_CONNECTION_ATTEMPTS)
+        if (++connectionAttempts < constants::network::maxConnectionAttempts)
         {
             MQTT.connect ();
             timerStart ();
@@ -189,8 +149,7 @@ class NwState_connectMqtt : public NetworkManager
             transit<NwState_error> (
                 [=] ()
                 {
-                    Serial.println ("error state");
-                    putNwStatus (nwstatus_error);
+                    pushStatus (nwstatus_error);
                 });
         }
     }
@@ -198,143 +157,93 @@ class NwState_connectMqtt : public NetworkManager
     void
     react (nwevent_mqtt_connected const &) override
     {
-        transit<NwState_subscribeMqtt> (
-            [=] ()
-            {
-                Serial.println ("subscribe mqtt");
-            });
+        transit<NwState_subscribeMqtt> ();
     }
 
   private:
-    uint connectionAttempts = 0;
+    uint connectionAttempts { 0 };
 };
-
-// ----------------------------------------------------------------------------
-// State: NwState_subscribeMqtt
-//
 
 class NwState_subscribeMqtt : public NetworkManager
 {
     void
     entry () override
     {
-        TickType_t waitMapRetainMs = pdMS_TO_TICKS (500);
-        timerInit (onTimeout, waitMapRetainMs);
+        xSemaphoreTake (retainSyncMsg, portMAX_DELAY);
 
-        subscription ();
-    }
-
-    void
-    exit () override
-    {
-        timerDelete ();
+        MQTT.subscribe (constants::network::mqttMapTopic, constants::network::mqttQos);
+        MQTT.subscribe (constants::network::mqttAgvInfoTopic, constants::network::mqttQos);
+        MQTT.subscribe (constants::network::mqttMissionTopic, constants::network::mqttQos);
     }
 
     void
     react (nwevent_mqtt_msg_map const &e) override
     {
-        fullPayload += String (e.payload, e.len);
+        mapMsg.concat (e.payload, e.len);
 
         if (e.index + e.len != e.total)
         {
             return;
         }
-
-        xSemaphoreTake (storageMapMutex, portMAX_DELAY);
-        bool isValidMap = storageMap.parseMapMsg (fullPayload);
-        xSemaphoreGive (storageMapMutex);
-
-        if (isValidMap)
-        {
-            isMapRetained = true;
-            transitWhenRetained ();
-        }
-
-        fullPayload = "";
-    }
-
-    void
-    react (nwevent_mqtt_msg_lineCount const &e) override
-    {
-        locationPayload = String (e.payload, e.len);
-
-        if (!isMapRetained)
-        {
-            timerStart ();
-        }
         else
         {
-            retainLocation ();
+            String cpyMapMsg (mapMsg);
+            mapMsg.clear ();
+
+            dpQueue.dispatch (
+                [=] () mutable
+                {
+                    xSemaphoreTake (global::mapMutex, portMAX_DELAY);
+                    global::map.parseMapMsg (cpyMapMsg) && xSemaphoreGive (retainSyncMsg);
+                    xSemaphoreGive (global::mapMutex);
+                });
         }
     }
 
     void
-    react (nwevent_timeout const &) override
+    react (nwevent_mqtt_msg_agvInfo const &e) override
     {
-        if (!isMapRetained)
-        {
-            timerStart ();
-        }
-        else
-        {
-            retainLocation ();
-        }
+        String agvInfoMsg (e.payload, e.len);
+
+        dpQueue.dispatch (
+            [&, agvInfoMsg] () mutable
+            {
+                xSemaphoreTake (retainSyncMsg, portMAX_DELAY) && xSemaphoreGive (retainSyncMsg);
+
+                transit<NwState_idle> (
+                    [=] () mutable
+                    {
+                        xQueueSend (global::agvInfoQueue, &agvInfo, portMAX_DELAY);
+                        pushStatus (nwstatus_good);
+                    },
+                    [&, agvInfoMsg] () mutable
+                    {
+                        return Map::parseAgvInfo (agvInfo, agvInfoMsg);
+                    });
+            });
     }
 
     void
     react (nwevent_mqtt_disconnected const &) override
     {
-        transit<NwState_connectMqtt> ();
+        transit<NwState_connectMqtt> (
+            [=] ()
+            {
+                pushStatus (nwstatus_mqtt_not_found);
+            });
     }
 
   private:
-    bool isMapRetained = false;
-    bool isLocationRetained = false;
-    String fullPayload = "";
-    String locationPayload = "";
-
-    void
-    retainLocation ()
-    {
-        xSemaphoreTake (storageMapMutex, portMAX_DELAY);
-        int currentLineCount = storageMap.parseLineCountMsg (locationPayload);
-        xSemaphoreGive (storageMapMutex);
-
-        xQueueSend (currentLineCountQueue, &currentLineCount, portMAX_DELAY);
-
-        isLocationRetained = true;
-        transitWhenRetained ();
-    }
-
-    void
-    transitWhenRetained ()
-    {
-        if (isMapRetained && isLocationRetained)
-        {
-            transit<NwState_idle> ();
-        }
-    }
-
-    void
-    subscription ()
-    {
-        MQTT.subscribe (NW_MQTT_TOPICNAME_MAP, NW_MQTT_TOPIC_QOS);
-        MQTT.subscribe (NW_MQTT_TOPICNAME_BOTLOCATION, NW_MQTT_TOPIC_QOS);
-        MQTT.subscribe (NW_MQTT_TOPICNAME_MISSION, NW_MQTT_TOPIC_QOS);
-    }
+    String mapMsg;
+    AGVInfo agvInfo;
 };
-
-// ----------------------------------------------------------------------------
-// State: NwState_idle
-//
 
 class NwState_idle : public NetworkManager
 {
     void
     entry () override
     {
-        putNwStatus (nwstatus_good);
-        timerInit (onTimeout, pdMS_TO_TICKS (CONF_NWFSM_TRACKING_INTERVAL_MS));
+        timerInit (constants::network::trackingInterval);
         timerStart ();
     }
 
@@ -347,82 +256,101 @@ class NwState_idle : public NetworkManager
     void
     react (nwevent_mqtt_disconnected const &)
     {
-        transit<NwState_connectMqtt> ();
+        transit<NwState_connectMqtt> (
+            [=] ()
+            {
+                pushStatus (nwstatus_mqtt_not_found);
+            });
     }
 
     void
     react (nwevent_mqtt_msg_mission const &e) override
     {
-        xSemaphoreTake (missionSyncMsg, portMAX_DELAY);
+        String missionMsg = String (e.payload, e.len);
 
-        String payload = String (e.payload, e.len);
-
-        MissionData mission;
-        if (parseMissionMsg (mission, payload))
-        {
-            // MissionStatus tasking = missionstatus_taking;
-            // xQueueSend (missionStatusQueue, &tasking, 0);
-
-            xQueueSend (missionQueue, &mission, 0);
-        }
-
-        xSemaphoreGive (missionSyncMsg);
+        dpQueue.dispatch (
+            [=, mission { Mission() } , tasking { MissionStatus::missionstatus_taking }] () mutable
+            {
+                if (Mission::parseMissionMsg (mission, missionMsg))
+                {
+                    xQueueSend (global::missionStatusQueue, &tasking, portMAX_DELAY);
+                    xQueueSend (global::missionQueue, &mission, portMAX_DELAY);
+                }
+            });
     }
 
     void
     react (nwevent_timeout const &) override
     {
-        // if (xSemaphoreTake (missionSyncMsg, 0) == pdFALSE)
-        // {
-        //     return;
-        // }
+        MissionStatus missionStatus;
+        if (xQueueReceive (global::missionStatusQueue, &missionStatus, 0) == pdTRUE)
+        {
+            // send mission info
+        }
 
-        // MissionStatus missionStatus;
+        AGVInfo agvInfo;
+        if (xQueueReceive (global::agvInfoQueue, &agvInfo, 0) == pdTRUE)
+        {
+            String agvInfoSerialized;
+            Map::parseAgvInfoToString (agvInfo, agvInfoSerialized);
 
-        // if (xQueueReceive (missionStatusQueue, &missionStatus, 0) == pdTRUE)
-        // {
-        // }
+            MQTT.publish (
+                "quang/test",
+                constants::network::mqttQos,
+                true, agvInfoSerialized.c_str (),
+                agvInfoSerialized.length ());
+        }
 
-        // xSemaphoreGive (missionSyncMsg);
-        // timerStart ();
+        timerStart ();
     }
 };
-
-// ----------------------------------------------------------------------------
-// State: NwState_error
-//
 
 class NwState_error : public NetworkManager
 {
 };
 
 // ----------------------------------------------------------------------------
-// Base state: default implementations
+// Initial state definition
 //
+
+FSM_INITIAL_STATE (NetworkManager, NwState_initialize)
+
+// ----------------------------------------------------------------------------
+// Base class implementations
+//
+
+AsyncMqttClient NetworkManager::MQTT;
+SemaphoreHandle_t NetworkManager::retainSyncMsg;
+
+dispatch_queue NetworkManager::dpQueue (
+    constants::network::dpQueueName,
+    constants::network::dpQueuethreadCnt,
+    constants::network::dpQueueStackDepth);
 
 void
 NetworkManager::react (nwevent_wifi_disconnected const &)
 {
     transit<NwState_connectWiFi> (
         [=] ()
-        { putNwStatus (nwstatus_wifi_not_found); });
+        {
+            pushStatus (nwstatus_wifi_not_found);
+        });
 }
 
 void
-NetworkManager::timerInit (TimerCallbackFunction_t cb, TickType_t period)
+NetworkManager::timerInit (TickType_t period)
 {
     _timer = xTimerCreate (
-        "NetworkManager timeout timer", // timer name
-        period,                         // period in ticks
-        pdTRUE,                         // auto reload
-        NULL,                           // timer id
-        cb);                            // callback
+        "NetworkTimer", // timer name
+        period,         // period in ticks
+        pdTRUE,         // auto reload
+        NULL,           // timer id
+        onTimeout);     // callback
 }
 
 void
 NetworkManager::timerStart ()
 {
-
     if (_timer == nullptr)
     {
         return;
@@ -461,54 +389,27 @@ NetworkManager::timerDelete ()
     xTimerDelete (_timer, portMAX_DELAY);
 }
 
-// ----------------------------------------------------------------------------
-// Initial state definition
-//
-
-FSM_INITIAL_STATE (NetworkManager, NwState_initialize)
-
-// ----------------------------------------------------------------------------
-// Helper definition
-//
-
 void
-nwStatusLoop ()
+NetworkManager::pushStatus (NwStatus status)
 {
-    NwStatus currentStatus;
-
-    /*  wait for data to become available in the queue  */
-    if (xQueueReceive (nwstatusQueue, &currentStatus, portMAX_DELAY) == pdFALSE)
-    {
-        return;
-    }
-
-    xSemaphoreTake (nwstatusMutex, portMAX_DELAY);
-    nwstatus = currentStatus;
-    xSemaphoreGive (nwstatusMutex);
+    dpQueue.dispatch (
+        [=] ()
+        {
+            xSemaphoreTake (global::nwstatusMutex, portMAX_DELAY);
+            global::nwstatus = status;
+            xSemaphoreGive (global::nwstatusMutex);
+        });
 }
 
-inline void
-putNwStatus (NwStatus status)
-{
-    xQueueSend (nwstatusQueue, &status, 0);
-}
-
-// ----------------------------------------------------------------------------
-// callback definition
-//
-
 void
-onTimeout (TimerHandle_t xTimer)
+NetworkManager::onTimeout (TimerHandle_t xTimer)
 {
     sendNwEvent (nwevent_timeout {});
 }
 
 void
-onWiFiEvent (WiFiEvent_t event, arduino_event_info_t eventInfo)
+NetworkManager::onWiFiEvent (WiFiEvent_t event, arduino_event_info_t eventInfo)
 {
-    Serial.print ("Wifi event: ");
-    Serial.println (event);
-
     switch (event)
     {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
@@ -526,29 +427,29 @@ onWiFiEvent (WiFiEvent_t event, arduino_event_info_t eventInfo)
 }
 
 void
-onMqttConnect (bool sessionPresent)
+NetworkManager::onMqttConnect (bool sessionPresent)
 {
     sendNwEvent (nwevent_mqtt_connected {});
 }
 
 void
-onMqttDisconnect (AsyncMqttClientDisconnectReason reason)
+NetworkManager::onMqttDisconnect (AsyncMqttClientDisconnectReason reason)
 {
     sendNwEvent (nwevent_mqtt_disconnected {});
 }
 
 void
-onMqttSubscribe (uint16_t packetId, uint8_t qos)
+NetworkManager::onMqttSubscribe (uint16_t packetId, uint8_t qos)
 {
 }
 
 void
-onMqttPublish (uint16_t packetId)
+NetworkManager::onMqttPublish (uint16_t packetId)
 {
 }
 
 void
-onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
+NetworkManager::onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
 {
 
     nwevent_mqtt_msg retainEvent;
@@ -558,23 +459,23 @@ onMqttMessage (char *topic, char *payload, AsyncMqttClientMessageProperties prop
     retainEvent.payload = payload;
 
     /* handle mission */
-    if (strcmp (NW_MQTT_TOPICNAME_MISSION, topic) == 0)
+    if (strcmp (constants::network::mqttMissionTopic, topic) == 0)
     {
         sendNwEvent (nwevent_mqtt_msg_mission { retainEvent });
         return;
     }
 
     /* handle retain map */
-    if (strcmp (NW_MQTT_TOPICNAME_MAP, topic) == 0)
+    if (strcmp (constants::network::mqttMapTopic, topic) == 0)
     {
         sendNwEvent (nwevent_mqtt_msg_map { retainEvent });
         return;
     }
 
     /* handle retain location */
-    if (strcmp (NW_MQTT_TOPICNAME_BOTLOCATION, topic) == 0)
+    if (strcmp (constants::network::mqttAgvInfoTopic, topic) == 0)
     {
-        sendNwEvent (nwevent_mqtt_msg_lineCount { retainEvent });
+        sendNwEvent (nwevent_mqtt_msg_agvInfo { retainEvent });
         return;
     }
 }
