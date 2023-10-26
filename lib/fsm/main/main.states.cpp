@@ -20,11 +20,11 @@ class MainState_done;
 // State implementations
 //
 
-class MainState_initialize : public MainManager
+class MainState_initialize: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
         pinMode (MAGNET, OUTPUT);
         digitalWrite (MAGNET, constants::main::magnetOff);
@@ -34,11 +34,11 @@ class MainState_initialize : public MainManager
         servo.write (constants::main::servoPushIn);
 
         dpQueue.dispatch (
-            [=] ()
+            [ = ] ()
             {
-                xQueueReceive (global::agvInfoQueue, &agvInfo, portMAX_DELAY);
-                transit<MainState_idle> (
-                    [=] ()
+                xQueueReceive (global::agvInfoQueue, &m_info, portMAX_DELAY);
+                transit< MainState_idle > (
+                    [ = ] ()
                     {
                         pushStatus (mainstatus_idle);
                     });
@@ -46,113 +46,85 @@ class MainState_initialize : public MainManager
     }
 };
 
-class MainState_idle : public MainManager
+class MainState_idle: public MainManager
 {
   public:
-    void
-    entry () override
+    void entry () override
     {
-        goHomeSync = xSemaphoreCreateBinary ();
-
         timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
-    void
-    exit () override
+    void exit () override
     {
         timerDelete ();
     }
 
-    void
-    react (mainevent_interval const &) override
+    void react (mainevent_interval const&) override
     {
-
         if (xQueueReceive (global::missionQueue, &mission, 0) == pdTRUE)
         {
             timerStop ();
             leaveHome ();
             goMainBranch ();
         }
-        else if (!agvInfo.isHome)
+        else if (!m_info.isHome)
         {
             timerStop ();
+
+            const int homeTarget = 1;
+
+            mission.setHomingMission (
+                1,
+                m_info.currentLineCount > homeTarget
+                    ? new String ("BP;TR;Do;")
+                    : new String ("BP;TL;Do;"));
+
             goMainBranch ();
-
-            dpQueue.dispatch (
-                [=]
-                {
-                    xSemaphoreTake (goHomeSync, portMAX_DELAY);
-
-                    mission.setHomingMission (
-                        1, agvInfo.direction == forward
-                               ? agvInfo.forwardDirHomingActs
-                               : agvInfo.rewardDirHomingActs);
-                });
         }
         else
-        {
             return;
-        }
 
         MissionStatus missionRunning = missionstatus_running;
         xQueueSend (global::missionStatusQueue, &missionRunning, portMAX_DELAY);
         pushStatus (mainstatus_runMission);
 
-        if (agvInfo.isMainBranch)
-        {
-            agvInfo.direction = agvInfo.direction == forward ? reward : forward;
-            xSemaphoreGive (goHomeSync);
-            transit<MainState_turnBack> ();
-        }
+        if (m_info.isMainBranch)
+            transit< MainState_turnBack > ();
         else
-        {
-            transit<MainState_dispatchAction> ();
-        }
+            transit< MainState_dispatchAction > ();
     }
 
   private:
-    xSemaphoreHandle goHomeSync;
-
-    void
-    leaveHome ()
+    void leaveHome ()
     {
-        if (agvInfo.isHome == false)
-        {
+        if (m_info.isHome == false)
             return;
-        }
 
-        Mission::parseMissionAct (action::queue, agvInfo.leaveHomeActs);
+        Mission::parseMissionAct (action::queue, m_info.leaveHomeActs);
 
-        agvInfo.isHome = false;
-        agvInfo.isMainBranch = false;
+        m_info.isHome       = false;
+        m_info.isMainBranch = false;
     }
 
-    void
-    goMainBranch ()
+    void goMainBranch ()
     {
-        if (!agvInfo.isMainBranch && agvInfo.currentLineCount > mission.getPhaseTarget ())
-        {
-            agvInfo.direction = reward;
+        if (!m_info.isMainBranch && m_info.currentLineCount > mission.getPhaseTarget ())
             action::push (act_turnRight, true);
-        }
-        else if (!agvInfo.isMainBranch)
-        {
-            agvInfo.direction = forward;
+        else if (!m_info.isMainBranch)
             action::push (act_turnLeft, true);
-        }
     }
 };
 
-class MainState_dispatchAction : public MainManager
+class MainState_dispatchAction: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
         if (!isHaveForceAction ())
         {
-            transit<MainState_move> ();
+            transit< MainState_move > ();
         }
 
         ActData act = action::pop ();
@@ -160,32 +132,31 @@ class MainState_dispatchAction : public MainManager
         switch (act.type)
         {
         case ActType::act_turnLeft:
-            transit<MainState_turnLeft> ();
+            transit< MainState_turnLeft > ();
             break;
         case ActType::act_turnRight:
-            transit<MainState_turnRight> ();
+            transit< MainState_turnRight > ();
             break;
         case ActType::act_turnBack:
-            transit<MainState_turnBack> ();
+            transit< MainState_turnBack > ();
             break;
         case ActType::act_bypass:
-            transit<MainState_bypass> ();
+            transit< MainState_bypass > ();
             break;
         case ActType::act_io:
-            transit<MainState_io> ();
+            transit< MainState_io > ();
             break;
         case ActType::act_done:
-            transit<MainState_done> ();
+            transit< MainState_done > ();
             break;
         }
     }
 };
 
-class MainState_move : public MainManager
+class MainState_move: public MainManager
 {
   public:
-    void
-    entry () override
+    void entry () override
     {
         pid.SetSampleTime (constants::global::intervalMs);
         pid.SetMode (AUTOMATIC);
@@ -195,19 +166,25 @@ class MainState_move : public MainManager
         timerStart ();
     }
 
-    void
-    exit () override
+    void exit () override
     {
         timerDelete ();
     }
 
-    void
-    react (mainevent_interval const &) override
+    void react (mainevent_interval const&) override
     {
-        transit<MainState_dispatchAction> ([] {}, isHaveForceAction);
-        transit<MainState_obstacle> (
-            [] {}, [=]
-            { return getUltrasonicDistance () <= constants::ultrasonic::stopDistance; });
+        transit< MainState_dispatchAction > ([]
+                                             {
+                                             },
+                                             isHaveForceAction);
+        transit< MainState_obstacle > (
+            []
+            {
+            },
+            [ = ]
+            {
+                return getUltrasonicDistance () <= constants::ultrasonic::stopDistance;
+            });
 
         currentPos = makerLine.readPosition ();
 
@@ -222,17 +199,14 @@ class MainState_move : public MainManager
         }
     }
 
-    void
-    react (mainevent_move const &) override
+    void react (mainevent_move const&) override
     {
         pid.Compute ();
 
         int baseSpeed = constants::main::midSpeed;
 
         if (
-            abs (mission.getPhaseTarget () - agvInfo.currentLineCount) <= 1 
-            || !action::queue.isEmpty ()
-            || ultrasonicDistance <= constants::ultrasonic::warnDistance)
+            abs (mission.getPhaseTarget () - m_info.currentLineCount) <= 1 || !action::queue.isEmpty () || ultrasonicDistance <= constants::ultrasonic::warnDistance)
         {
             baseSpeed = constants::main::lowSpeed;
         }
@@ -246,79 +220,61 @@ class MainState_move : public MainManager
 
   private:
     double setPos { 0 }, currentPos { 0 }, computedPos { 0 };
-    float ultrasonicDistance;
-    PID pid { PID (
-        &currentPos, &computedPos, &setPos,
-        constants::main::kp, constants::main::ki, constants::main::kd, AUTOMATIC) };
+    float  ultrasonicDistance;
+    PID    pid { PID (
+        &currentPos,
+        &computedPos,
+        &setPos,
+        constants::main::kp,
+        constants::main::ki,
+        constants::main::kd,
+        AUTOMATIC) };
 
-    void
-    stopHandle ()
+    void stopHandle ()
     {
         if (!action::queue.isEmpty ())
         {
-            transit<MainState_dispatchAction> ();
+            transit< MainState_dispatchAction > ();
         }
         else
         {
-            agvInfo.currentLineCount = mission.getPhaseTarget () < agvInfo.currentLineCount
-                                           ? agvInfo.currentLineCount - 1
-                                           : agvInfo.currentLineCount + 1;
+            m_info.currentLineCount = mission.getPhaseTarget () < m_info.currentLineCount
+                                          ? m_info.currentLineCount - 1
+                                          : m_info.currentLineCount + 1;
 
-            if (agvInfo.currentLineCount == mission.getPhaseTarget ())
+            if (m_info.currentLineCount == mission.getPhaseTarget ())
             {
-                String *acts = mission.getPhaseActs ();
+                String* acts = mission.getPhaseActs ();
                 Mission::parseMissionAct (action::queue, acts);
 
                 xSemaphoreTake (global::mapMutex, portMAX_DELAY);
-                agvInfo.isMainBranch = global::map.lineCountIsInMainBranch (mission.getPhaseTarget ());
+                m_info.isMainBranch = global::map.lineCountIsInMainBranch (mission.getPhaseTarget ());
                 xSemaphoreGive (global::mapMutex);
 
-                if (!agvInfo.isMainBranch && mission.getPhase () == phase1)
-                {
-                    String lastAct = acts->substring (
-                        acts->length () - constants::mission::actCodeTable::codeLength - 1,
-                        acts->length () + constants::mission::actCodeTable::codeLength);
-
-                    switch (lastAct[0] + lastAct[1])
-                    {
-                    case constants::mission::actCodeTable::turnLeft:
-                    case constants::mission::actCodeTable::forceTurnLeft:
-                        agvInfo.direction = forward;
-                        break;
-                    case constants::mission::actCodeTable::turnRight:
-                    case constants::mission::actCodeTable::forceTurnRight:
-                        agvInfo.direction = reward;
-                        break;
-                    }
-                }
-
                 dpQueue.dispatch (
-                    [=] ()
+                    [ = ]
                     {
-                        xQueueSend (global::agvInfoQueue, &agvInfo, portMAX_DELAY);
+                        xQueueSend (global::agvInfoQueue, &m_info, portMAX_DELAY);
                     });
 
-                if (!mission.isHomingMission ())
-                {
-                    delete acts;
-                }
+                delete acts;
+
                 mission.turnNextPhase ();
-                transit<MainState_dispatchAction> ();
+                transit< MainState_dispatchAction > ();
             }
             else
             {
                 dpQueue.dispatch (
-                    [=] ()
+                    [ = ] ()
                     {
-                        xQueueSend (global::agvInfoQueue, &agvInfo, portMAX_DELAY);
+                        xQueueSend (global::agvInfoQueue, &m_info, portMAX_DELAY);
                     });
-                transit<MainState_bypass> ();
+                transit< MainState_bypass > ();
             }
         }
     }
 
-    float
-    getUltrasonicDistance ()
+    float getUltrasonicDistance ()
     {
         xSemaphoreTake (global::ultrasonicDistanceMutex, portMAX_DELAY);
         ultrasonicDistance = global::ultrasonicDistance;
@@ -328,20 +284,20 @@ class MainState_move : public MainManager
     }
 };
 
-class MainState_obstacle : public MainManager
+class MainState_obstacle: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
-        stopAgv();
+        stopAgv ();
 
         dpQueue.dispatch (
-            [=] ()
+            [ = ] ()
             {
                 xSemaphoreTake (global::ultrasonicDistanceStopsync, portMAX_DELAY);
-                transit<MainState_move> (
-                    [=] ()
+                transit< MainState_move > (
+                    [ = ] ()
                     {
                         xSemaphoreGive (global::ultrasonicDistanceStopsync);
                     });
@@ -349,30 +305,30 @@ class MainState_obstacle : public MainManager
     }
 };
 
-class MainState_bypass : public MainManager
+class MainState_bypass: public MainManager
 {
     void
-    entry () override
+        entry () override
     {
         timerInit (onInterval, constants::global::intervalMs, true);
         timerStart ();
     }
 
     void
-    exit () override
+        exit () override
     {
         timerDelete ();
     }
 
     void
-    react (mainevent_interval const &) override
+        react (mainevent_interval const&) override
     {
         if (makerLine.readPosition (STOP_POSITION) != STOP_POSITION)
         {
             timerStop ();
 
             dpQueue.dispatch (
-                [=] ()
+                [ = ] ()
                 {
                     vTaskDelay (constants::main::stateDelayMs);
                     rhsMotor.stop ();
@@ -381,11 +337,11 @@ class MainState_bypass : public MainManager
 
                     if (isHaveForceAction ())
                     {
-                        transit<MainState_dispatchAction> ();
+                        transit< MainState_dispatchAction > ();
                     }
                     else
                     {
-                        transit<MainState_move> ();
+                        transit< MainState_move > ();
                     }
                 });
         }
@@ -400,11 +356,11 @@ class MainState_bypass : public MainManager
     }
 };
 
-class MainState_turnLeft : public MainManager
+class MainState_turnLeft: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
         step = 0;
         timerInit (onInterval, constants::global::intervalMs, true);
@@ -412,13 +368,13 @@ class MainState_turnLeft : public MainManager
     }
 
     void
-    exit ()
+        exit ()
     {
         timerDelete ();
     }
 
     void
-    react (mainevent_interval const &) override
+        react (mainevent_interval const&) override
     {
         int pos = makerLine.readPosition (STOP_POSITION);
 
@@ -442,11 +398,11 @@ class MainState_turnLeft : public MainManager
 
             if (isHaveForceAction ())
             {
-                transit<MainState_dispatchAction> ();
+                transit< MainState_dispatchAction > ();
             }
             else
             {
-                transit<MainState_move> ();
+                transit< MainState_move > ();
             }
         }
         else
@@ -461,11 +417,11 @@ class MainState_turnLeft : public MainManager
     int step { 0 };
 };
 
-class MainState_turnRight : public MainManager
+class MainState_turnRight: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
         step = 0;
         timerInit (onInterval, constants::global::intervalMs, true);
@@ -473,13 +429,13 @@ class MainState_turnRight : public MainManager
     }
 
     void
-    exit ()
+        exit ()
     {
         timerDelete ();
     }
 
     void
-    react (mainevent_interval const &) override
+        react (mainevent_interval const&) override
     {
         int pos = makerLine.readPosition (STOP_POSITION);
 
@@ -503,11 +459,11 @@ class MainState_turnRight : public MainManager
 
             if (isHaveForceAction ())
             {
-                transit<MainState_dispatchAction> ();
+                transit< MainState_dispatchAction > ();
             }
             else
             {
-                transit<MainState_move> ();
+                transit< MainState_move > ();
             }
         }
         else
@@ -522,36 +478,36 @@ class MainState_turnRight : public MainManager
     int step { 0 };
 };
 
-class MainState_io : public MainManager
+class MainState_io: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
-        agvInfo.isItemPicked = !agvInfo.isItemPicked;
+        m_info.isItemPicked = !m_info.isItemPicked;
         dpQueue.dispatch (
-            [=] ()
+            [ = ] ()
             {
                 servoPutOut ();
-                digitalWrite (MAGNET, agvInfo.isItemPicked ? constants::main::magnetOn : constants::main::magnetOff);
+                digitalWrite (MAGNET, m_info.isItemPicked ? constants::main::magnetOn : constants::main::magnetOff);
                 vTaskDelay (constants::main::ioDelayMs);
                 servoPutIn ();
                 vTaskDelay (constants::main::ioDelayMs);
 
                 if (isHaveForceAction ())
                 {
-                    transit<MainState_dispatchAction> ();
+                    transit< MainState_dispatchAction > ();
                 }
                 else
                 {
-                    transit<MainState_move> ();
+                    transit< MainState_move > ();
                 }
             });
     }
 
   private:
     void
-    servoPutOut ()
+        servoPutOut ()
     {
         for (int i = constants::main::servoPushIn; i <= constants::main::servoPushOut; i++)
         {
@@ -561,7 +517,7 @@ class MainState_io : public MainManager
     }
 
     void
-    servoPutIn ()
+        servoPutIn ()
     {
         for (int i = constants::main::servoPushOut; i >= constants::main::servoPushIn; i--)
         {
@@ -571,11 +527,11 @@ class MainState_io : public MainManager
     }
 };
 
-class MainState_turnBack : public MainManager
+class MainState_turnBack: public MainManager
 {
   public:
     void
-    entry () override
+        entry () override
     {
         step = 0;
         timerInit (onInterval, constants::global::intervalMs, true);
@@ -583,13 +539,13 @@ class MainState_turnBack : public MainManager
     }
 
     void
-    exit () override
+        exit () override
     {
         timerDelete ();
     }
 
     void
-    react (mainevent_interval const &) override
+        react (mainevent_interval const&) override
     {
         int pos = makerLine.readPosition (12);
 
@@ -610,11 +566,11 @@ class MainState_turnBack : public MainManager
 
             if (isHaveForceAction ())
             {
-                transit<MainState_dispatchAction> ();
+                transit< MainState_dispatchAction > ();
             }
             else
             {
-                transit<MainState_move> ();
+                transit< MainState_move > ();
             }
         }
         else
@@ -627,7 +583,7 @@ class MainState_turnBack : public MainManager
     int step { 0 };
 
     void
-    rotation (int speed)
+        rotation (int speed)
     {
         rhsMotor.reward ();
         rhsMotor.setSpeed (speed);
@@ -636,25 +592,25 @@ class MainState_turnBack : public MainManager
     }
 };
 
-class MainState_done : public MainManager
+class MainState_done: public MainManager
 {
     void
-    entry () override
+        entry () override
     {
         stopAgv ();
 
         // dpQueue.dispatch (
         //     [=] ()
         //     {
-        transit<MainState_idle> (
-            [=] ()
+        transit< MainState_idle > (
+            [ = ] ()
             {
                 if (mission.isHomingMission ())
                 {
-                    agvInfo.isHome = true;
+                    m_info.isHome = true;
                 }
 
-                xQueueSend (global::agvInfoQueue, &agvInfo, portMAX_DELAY);
+                xQueueSend (global::agvInfoQueue, &m_info, portMAX_DELAY);
 
                 MissionStatus missionDone = missionstatus_done;
                 xQueueSend (global::missionStatusQueue, &missionDone, portMAX_DELAY);

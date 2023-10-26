@@ -67,7 +67,7 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     static MakerLine makerLine;
     static Servo servo;
     
-    static AGVInfo agvInfo;
+    static AGVInfo m_info;
 
     static Mission mission;
 
