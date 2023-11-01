@@ -1,98 +1,93 @@
 #include "mission.h"
 
-DynamicJsonDocument Mission::jsonObj (512);
-
 Mission::Mission ()
-    : phase1Target { 0 }, phase1Acts { nullptr },
-      phase2Target { 0 }, phase2Acts { nullptr },
-      currentPhase { phase1 }, _isHomingMission { false } {};
+    : m_id { nullptr }
+    , m_phase1Target { 0 }
+    , m_phase1Acts { nullptr }
+    , m_phase2Target { 0 }
+    , m_phase2Acts { nullptr }
+    , currentPhase { phase1 }
+    , m_isHomeMission { false } {};
 
-void
-Mission::setMission (int phase1Target, String *phase1Acts, int phase2Target, String *phase2Acts)
+void Mission::setMission (String* id, int phase1Target, String* phase1Acts, int phase2Target, String* phase2Acts)
 {
+    m_id = id;
+
+    m_phase1Target = phase1Target;
+    m_phase1Acts   = phase1Acts;
+
+    m_phase2Target = phase2Target;
+    m_phase2Acts   = phase2Acts;
 
     currentPhase = phase1;
 
-    this->phase1Target = phase1Target;
-    this->phase1Acts = phase1Acts;
-
-    this->phase2Target = phase2Target;
-    this->phase2Acts = phase2Acts;
-
-    if (_isHomingMission)
-    {
-        _isHomingMission = false;
-    }
+    if (m_isHomeMission)
+        m_isHomeMission = false;
 }
 
-void
-Mission::setHomingMission (int homeTarget, String *homeActs)
+void Mission::setHomingMission (int homeTarget, String* homeActs)
 {
-    setMission (homeTarget, homeActs, homeTarget, homeActs);
+    setMission (new String ("HO"), homeTarget, homeActs, homeTarget, homeActs);
     currentPhase = phase2;
 
-    if (_isHomingMission == false)
-    {
-        _isHomingMission = true;
-    }
+    if (m_isHomeMission == false)
+        m_isHomeMission = true;
 }
 
-bool
-Mission::isHomingMission ()
+bool Mission::isHomingMission ()
 {
-    return _isHomingMission;
+    return m_isHomeMission;
 }
 
-MissionPhase
-Mission::getPhase ()
+Mission::Phase Mission::getPhase () const
 {
     return currentPhase;
 }
 
-void
-Mission::turnNextPhase ()
+void Mission::turnNextPhase ()
 {
     if (currentPhase == phase1)
-    {
         currentPhase = phase2;
-    }
 }
 
-int
-Mission::getPhaseTarget ()
+int Mission::getPhaseTarget () const
 {
-    return currentPhase == phase1 ? phase1Target : phase2Target;
+    return currentPhase == phase1 ? m_phase1Target : m_phase2Target;
 }
 
-String *
-Mission::getPhaseActs ()
+String* Mission::getPhaseActs () const
 {
-    return currentPhase == phase1 ? phase1Acts : phase2Acts;
+    return currentPhase == phase1 ? m_phase1Acts : m_phase2Acts;
 }
 
-bool
-Mission::parseMissionMsg (Mission &mission, String &missionMsg)
+String* Mission::id() {
+    return m_id;
+}
+
+bool Mission::parseMissionMsg (Mission& mission, String& missionMsg)
 {
-    if (deserializeJson (jsonObj, missionMsg))
+    DynamicJsonDocument doc (256);
+    if (deserializeJson (doc, missionMsg))
     {
         Serial.print (F ("Mission deserializeJson() failed"));
         return false;
     }
 
-    JsonObject phase1Obj = jsonObj[constants::mission::jsonKey::phase1];
-    JsonObject phase2Obj = jsonObj[constants::mission::jsonKey::phase2];
+    JsonObject phase1Obj = doc[ constants::mission::jsonKey::phase1 ];
+    JsonObject phase2Obj = doc[ constants::mission::jsonKey::phase2 ];
+    String*    id        = new String (doc[ constants::mission::jsonKey::id ]);
 
-    mission.setMission (
-        phase1Obj[constants::mission::jsonKey::target].as<int> (),
-        new String (phase1Obj[constants::mission::jsonKey::action].as<String> ()),
-        phase2Obj[constants::mission::jsonKey::target].as<int> (),
-        new String (phase2Obj[constants::mission::jsonKey::action].as<String> ()));
+    int     phase1Target = phase1Obj[ constants::mission::jsonKey::target ].as< int > ();
+    String* phase1Acts   = new String (phase1Obj[ constants::mission::jsonKey::action ].as< String > ());
+    int     phase2Target = phase2Obj[ constants::mission::jsonKey::target ].as< int > ();
+    String* phase2Acts   = new String (phase2Obj[ constants::mission::jsonKey::action ].as< String > ());
+
+    mission.setMission (id, phase1Target, phase1Acts, phase2Target, phase2Acts);
 
     return true;
 }
 
-void
-Mission::parseMissionAct (cppQueue &actQueue, String *acts)
+void Mission::parseMissionAct (cppQueue& actQueue, String* acts)
 {
     for (
         int i = 0;
@@ -104,7 +99,7 @@ Mission::parseMissionAct (cppQueue &actQueue, String *acts)
     {
         String act = acts->substring (i, i + constants::mission::actCodeTable::codeLength);
 
-        switch (act[0] + act[1])
+        switch (act[ 0 ] + act[ 1 ])
         {
         case constants::mission::actCodeTable::io:
             pushAct (actQueue, act_io);
@@ -147,11 +142,10 @@ Mission::parseMissionAct (cppQueue &actQueue, String *acts)
     }
 }
 
-void
-Mission::pushAct (cppQueue &actQueue, ActType type, bool forceExcu)
+void Mission::pushAct (cppQueue& actQueue, ActType type, bool forceExcu)
 {
     ActData act;
-    act.type = type;
+    act.type      = type;
     act.forceExcu = forceExcu;
 
     actQueue.push (&act);

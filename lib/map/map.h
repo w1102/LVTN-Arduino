@@ -12,33 +12,18 @@ class Map
   public:
     Map ();
 
-    int getImportLineCount ();
-    int getExportLineCount ();
-    bool lineCountIsInMainBranch(int lineCount);
+    int  getHomeLineCnt () const;
+    int  getImportLineCount () const;
+    int  getExportLineCount () const;
+    bool isInMainBranch (int);
 
-    static bool parseMapMsg (String &mapMsg);
-    static bool parseAgvInfo (AGVInfo &agvInfo, String &agvInfoMsg);
-    static void parseAgvInfoToString(AGVInfo& agvInfo, String& dst);
+    static bool parseMapMsg (const String& mapMsg);
+    static bool parseAgvInfo (const String& agvInfoMsg, AGVInfo& agvInfo);
+    static void parseAgvInfoToString (const AGVInfo& agvInfo, String& agvInfoStr);
 
   private:
-    static DynamicJsonDocument mapJsonObj;
-    static DynamicJsonDocument agvObj;
-};
-
-class StorageMap
-{
-  public:
-    StorageMap ();
-    bool parseMapMsg (String mapStr);
-    bool parseLineCountMsg (int &lineCount, String &lineCountMsg);
-
-    MapSize mapSize ();
-
-    int getImportLineCount ();
-    int getExportLineCount ();
-    int getHomeLinecount ();
-
-    String lineCount2mapPosStr (int lineCount);
+    static DynamicJsonDocument m_mapDoc;
+    static DynamicJsonDocument m_agvDoc;
 };
 
 #endif // MAP_H_

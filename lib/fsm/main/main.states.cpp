@@ -33,6 +33,14 @@ class MainState_initialize: public MainManager
         servo.attach (SERVO, constants::main::servoUsLow, constants::main::servoUsHigh);
         servo.write (constants::main::servoPushIn);
 
+
+
+        // for(;;) {
+        //     int res = makerLine.readPosition();
+        //     Serial.println(res);
+        //     vTaskDelay(pdMS_TO_TICKS(5));
+        // }
+
         dpQueue.dispatch (
             [ = ] ()
             {
@@ -40,7 +48,7 @@ class MainState_initialize: public MainManager
                 transit< MainState_idle > (
                     [ = ] ()
                     {
-                        pushStatus (mainstatus_idle);
+                        putMainStatus (mainstatus_idle);
                     });
             });
     }
@@ -72,22 +80,32 @@ class MainState_idle: public MainManager
         {
             timerStop ();
 
-            const int homeTarget = 1;
+            xSemaphoreTake (global::mapMutex, portMAX_DELAY);
+            const int homeTarget = global::map.getHomeLineCnt ();
+            xSemaphoreGive (global::mapMutex);
 
             mission.setHomingMission (
-                1,
+                homeTarget,
                 m_info.currentLineCount > homeTarget
                     ? new String ("BP;TR;Do;")
                     : new String ("BP;TL;Do;"));
 
             goMainBranch ();
         }
+        else if (*m_info.missionId != "")
+        {
+            *m_info.missionId = "";
+            xQueueSend (global::agvInfoQueue, &m_info, portMAX_DELAY);
+            return;
+        }
         else
             return;
 
+        m_info.missionId = mission.id ();
+
         MissionStatus missionRunning = missionstatus_running;
         xQueueSend (global::missionStatusQueue, &missionRunning, portMAX_DELAY);
-        pushStatus (mainstatus_runMission);
+        putMainStatus (mainstatus_runMission);
 
         if (m_info.isMainBranch)
             transit< MainState_turnBack > ();
@@ -98,7 +116,7 @@ class MainState_idle: public MainManager
   private:
     void leaveHome ()
     {
-        if (m_info.isHome == false)
+        if (!m_info.isHome)
             return;
 
         Mission::parseMissionAct (action::queue, m_info.leaveHomeActs);
@@ -173,18 +191,11 @@ class MainState_move: public MainManager
 
     void react (mainevent_interval const&) override
     {
-        transit< MainState_dispatchAction > ([]
-                                             {
-                                             },
-                                             isHaveForceAction);
-        transit< MainState_obstacle > (
-            []
-            {
-            },
-            [ = ]
-            {
-                return getUltrasonicDistance () <= constants::ultrasonic::stopDistance;
-            });
+        if (isHaveForceAction ())
+            transit< MainState_dispatchAction > ();
+
+        if (getUltrasonicDistance () <= constants::ultrasonic::stopDistance)
+            transit< MainState_obstacle > ();
 
         currentPos = makerLine.readPosition ();
 
@@ -211,11 +222,11 @@ class MainState_move: public MainManager
             baseSpeed = constants::main::lowSpeed;
         }
 
-        rhsMotor.forward ();
-        rhsMotor.setSpeed (baseSpeed + this->computedPos);
-
         lhsMotor.forward ();
-        lhsMotor.setSpeed (baseSpeed - this->computedPos);
+        lhsMotor.setSpeed (baseSpeed + this->computedPos);
+
+        rhsMotor.forward ();
+        rhsMotor.setSpeed (baseSpeed - this->computedPos);
     }
 
   private:
@@ -233,9 +244,7 @@ class MainState_move: public MainManager
     void stopHandle ()
     {
         if (!action::queue.isEmpty ())
-        {
             transit< MainState_dispatchAction > ();
-        }
         else
         {
             m_info.currentLineCount = mission.getPhaseTarget () < m_info.currentLineCount
@@ -248,14 +257,10 @@ class MainState_move: public MainManager
                 Mission::parseMissionAct (action::queue, acts);
 
                 xSemaphoreTake (global::mapMutex, portMAX_DELAY);
-                m_info.isMainBranch = global::map.lineCountIsInMainBranch (mission.getPhaseTarget ());
+                m_info.isMainBranch = global::map.isInMainBranch (mission.getPhaseTarget ());
                 xSemaphoreGive (global::mapMutex);
 
-                dpQueue.dispatch (
-                    [ = ]
-                    {
-                        xQueueSend (global::agvInfoQueue, &m_info, portMAX_DELAY);
-                    });
+                xQueueSend (global::agvInfoQueue, &m_info, portMAX_DELAY);
 
                 delete acts;
 
@@ -384,10 +389,10 @@ class MainState_turnLeft: public MainManager
         }
         else if (step == 0)
         {
-            rhsMotor.reward ();
-            rhsMotor.setSpeed (constants::main::higSpeed);
-            lhsMotor.forward ();
+            lhsMotor.reward ();
             lhsMotor.setSpeed (constants::main::higSpeed);
+            rhsMotor.forward ();
+            rhsMotor.setSpeed (constants::main::higSpeed);
         }
         else if (pos >= -1 && pos <= 1)
         {
@@ -407,9 +412,9 @@ class MainState_turnLeft: public MainManager
         }
         else
         {
-            rhsMotor.stop ();
-            lhsMotor.forward ();
-            lhsMotor.setSpeed (constants::main::midSpeed);
+            lhsMotor.stop ();
+            rhsMotor.forward ();
+            rhsMotor.setSpeed (constants::main::midSpeed);
         }
     }
 
@@ -445,10 +450,10 @@ class MainState_turnRight: public MainManager
         }
         else if (step == 0)
         {
-            lhsMotor.reward ();
-            lhsMotor.setSpeed (constants::main::higSpeed);
-            rhsMotor.forward ();
+            rhsMotor.reward ();
             rhsMotor.setSpeed (constants::main::higSpeed);
+            lhsMotor.forward ();
+            lhsMotor.setSpeed (constants::main::higSpeed);
         }
         else if (pos >= -1 && pos <= 1)
         {
@@ -468,9 +473,9 @@ class MainState_turnRight: public MainManager
         }
         else
         {
-            lhsMotor.stop ();
-            rhsMotor.forward ();
-            rhsMotor.setSpeed (constants::main::midSpeed);
+            rhsMotor.stop ();
+            lhsMotor.forward ();
+            lhsMotor.setSpeed (constants::main::midSpeed);
         }
     }
 
@@ -585,10 +590,10 @@ class MainState_turnBack: public MainManager
     void
         rotation (int speed)
     {
-        rhsMotor.reward ();
-        rhsMotor.setSpeed (speed);
-        lhsMotor.forward ();
+        lhsMotor.reward ();
         lhsMotor.setSpeed (speed);
+        rhsMotor.forward ();
+        rhsMotor.setSpeed (speed);
     }
 };
 
@@ -615,7 +620,7 @@ class MainState_done: public MainManager
                 MissionStatus missionDone = missionstatus_done;
                 xQueueSend (global::missionStatusQueue, &missionDone, portMAX_DELAY);
 
-                pushStatus (mainstatus_idle);
+                putMainStatus (mainstatus_idle);
             });
         //   });
     }

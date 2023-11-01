@@ -1,7 +1,6 @@
 #include "main.fsm.h"
 
-void
-MainManager::timerInit (TimerCallbackFunction_t cb, TickType_t xTimerPeriodInTicks, UBaseType_t autoReaload)
+void MainManager::timerInit (TimerCallbackFunction_t cb, TickType_t xTimerPeriodInTicks, UBaseType_t autoReaload)
 {
     _timer = xTimerCreate (
         "MainIntervalTimer", // timer name
@@ -11,50 +10,37 @@ MainManager::timerInit (TimerCallbackFunction_t cb, TickType_t xTimerPeriodInTic
         cb);                 // callback
 }
 
-void
-MainManager::timerStart ()
+void MainManager::timerStart ()
 {
     if (_timer == nullptr)
-    {
         return;
-    }
 
     if (!xTimerIsTimerActive (_timer))
-    {
         xTimerStart (_timer, 0);
-    }
 }
 
-void
-MainManager::timerStop ()
+void MainManager::timerStop ()
 {
     if (_timer == nullptr)
-    {
         return;
-    }
 
     if (xTimerIsTimerActive (_timer))
-    {
         xTimerStop (_timer, 0);
-    }
 }
 
-void
-MainManager::timerDelete ()
+void MainManager::timerDelete ()
 {
     if (_timer == nullptr)
-    {
         return;
-    }
+
     timerStop ();
-    xTimerDelete (_timer, 1000);
+    xTimerDelete (_timer, portMAX_DELAY);
 }
 
-void
-MainManager::pushStatus (MainStatus status)
+void MainManager::putMainStatus (MainStatus status)
 {
     dpQueue.dispatch (
-        [=] ()
+        [ = ] ()
         {
             xSemaphoreTake (global::mainstatusMutex, portMAX_DELAY);
             global::mainstatus = status;
@@ -62,25 +48,22 @@ MainManager::pushStatus (MainStatus status)
         });
 }
 
-void
-MainManager::onInterval (TimerHandle_t t)
+void MainManager::onInterval (TimerHandle_t t)
 {
     sendMainEvent (mainevent_interval {});
 }
 
-bool
-MainManager::isHaveForceAction ()
+bool MainManager::isHaveForceAction ()
 {
     ActData nextAct;
+
     if (action::queue.peek (&nextAct))
-    {
         return nextAct.forceExcu;
-    }
+
     return false;
 }
 
-void
-MainManager::stopAgv ()
+void MainManager::stopAgv ()
 {
     timerStop ();
     rhsMotor.stop ();
