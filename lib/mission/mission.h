@@ -10,29 +10,39 @@
 class Mission
 {
   public:
+    enum Phase
+    {
+        phase1,
+        phase2
+    };
+
     Mission ();
 
-    void setMission (int phase1Target, String *phase1Acts, int phase2Target, String *phase2Acts);
-    void setHomingMission (int homeTarget, String *homeActs);
-    bool isHomingMission();
+    void setMission (String* id, int phase1Target, String* phase1Acts, int phase2Target, String* phase2Acts);
+    void setHomingMission (int homeTarget, String* homeActs);
+    bool isHomingMission ();
 
-    MissionPhase getPhase ();
-    void turnNextPhase ();
+    Mission::Phase getPhase () const;
+    void           turnNextPhase ();
 
-    int getPhaseTarget ();
-    String *getPhaseActs ();
+    int     getPhaseTarget () const;
+    String* getPhaseActs () const;
 
-    static bool parseMissionMsg (Mission &mission, String &missionMsg);
-    static void parseMissionAct (cppQueue &actQueue, String *acts);
+    String* id();
+
+    static bool parseMissionMsg (Mission& mission, String& missionMsg);
+    static void parseMissionAct (cppQueue& actQueue, String* acts);
 
   private:
-    static DynamicJsonDocument jsonObj;
-    bool _isHomingMission;
-    MissionPhase currentPhase;
-    String *phase1Acts, *phase2Acts;
-    int phase1Target, phase2Target;
+    Mission::Phase currentPhase;
+    String*        m_id;
+    String*        m_phase1Acts;
+    String*        m_phase2Acts;
+    bool           m_isHomeMission;
+    int            m_phase1Target;
+    int            m_phase2Target;
 
-    static void pushAct (cppQueue &actQueue, ActType type, bool forceExcu = false);
+    static void pushAct (cppQueue& actQueue, ActType type, bool forceExcu = false);
 };
 
 #endif // MISSION_H_

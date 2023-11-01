@@ -1,14 +1,13 @@
 #include "map.h"
 
-DynamicJsonDocument Map::mapJsonObj (6200);
-DynamicJsonDocument Map::agvObj (1024);
+DynamicJsonDocument Map::m_mapDoc (6200);
+DynamicJsonDocument Map::m_agvDoc (1024);
 
 Map::Map () {};
 
-bool
-Map::parseMapMsg (String &mapMsg)
+bool Map::parseMapMsg (const String& mapMsg)
 {
-    DeserializationError error = deserializeJson (mapJsonObj, mapMsg);
+    DeserializationError error = deserializeJson (m_mapDoc, mapMsg);
 
     if (error)
     {
@@ -19,10 +18,9 @@ Map::parseMapMsg (String &mapMsg)
     return true;
 }
 
-bool
-Map::parseAgvInfo (AGVInfo &agvInfo, String &agvInfoMsg)
+bool Map::parseAgvInfo (const String& agvInfoMsg, AGVInfo& agvInfo)
 {
-    DeserializationError error = deserializeJson (agvObj, agvInfoMsg);
+    DeserializationError error = deserializeJson (m_agvDoc, agvInfoMsg);
 
     if (error)
     {
@@ -30,196 +28,86 @@ Map::parseAgvInfo (AGVInfo &agvInfo, String &agvInfoMsg)
         return false;
     }
 
-    agvInfo.id = new String (agvObj[constants::map::jsonKey::id].as<String> ());
+    agvInfo.id                   = new String (m_agvDoc[ constants::map::jsonKey::id ].as< String > ());
+    agvInfo.missionId            = new String (m_agvDoc[ constants::map::jsonKey::missionId ].as< String > ());
+    agvInfo.leaveHomeActs        = new String (m_agvDoc[ constants::map::jsonKey::leaveHomeActs ].as< String > ());
+    agvInfo.forwardDirHomingActs = new String (m_agvDoc[ constants::map::jsonKey::forwardDirHomingActs ].as< String > ());
+    agvInfo.rewardDirHomingActs  = new String (m_agvDoc[ constants::map::jsonKey::rewardDirHomingActs ].as< String > ());
 
-    agvInfo.leaveHomeActs = new String (agvObj[constants::map::jsonKey::leaveHomeActs].as<String> ());
-    agvInfo.forwardDirHomingActs = new String (agvObj[constants::map::jsonKey::forwardDirHomingActs].as<String> ());
-    agvInfo.rewardDirHomingActs = new String (agvObj[constants::map::jsonKey::rewardDirHomingActs].as<String> ());
+    agvInfo.currentLineCount = m_agvDoc[ constants::map::jsonKey::currentLineCount ];
 
-    agvInfo.direction = (agvObj[constants::map::jsonKey::direction].as<int> () == 1)
-                            ? forward
-                            : reward;
-
-    agvInfo.currentLineCount = agvObj[constants::map::jsonKey::currentLineCount];
-
-    agvInfo.isHome = agvObj[constants::map::jsonKey::isHome];
-    agvInfo.isMainBranch = agvObj[constants::map::jsonKey::isMainBranch];
-    agvInfo.isItemPicked = agvObj[constants::map::jsonKey::isItemPicked];
+    agvInfo.isHome       = m_agvDoc[ constants::map::jsonKey::isHome ];
+    agvInfo.isMainBranch = m_agvDoc[ constants::map::jsonKey::isMainBranch ];
+    agvInfo.isItemPicked = m_agvDoc[ constants::map::jsonKey::isItemPicked ];
 
     return true;
 }
 
-void
-Map::parseAgvInfoToString (AGVInfo &agvInfo, String &dst)
+void Map::parseAgvInfoToString (const AGVInfo& agvInfo, String& agvInfoStr)
 {
-    agvObj.clear ();
+    m_agvDoc.clear ();
 
-    agvObj[constants::map::jsonKey::id] = *agvInfo.id;
-    agvObj[constants::map::jsonKey::leaveHomeActs] = *agvInfo.leaveHomeActs;
-    agvObj[constants::map::jsonKey::forwardDirHomingActs] = *agvInfo.forwardDirHomingActs;
-    agvObj[constants::map::jsonKey::rewardDirHomingActs] = *agvInfo.rewardDirHomingActs;
-    agvObj[constants::map::jsonKey::direction] = agvInfo.direction == forward ? 1 : 0;
-    agvObj[constants::map::jsonKey::currentLineCount] = agvInfo.currentLineCount;
-    agvObj[constants::map::jsonKey::isHome] = agvInfo.isHome;
-    agvObj[constants::map::jsonKey::isItemPicked] = agvInfo.isItemPicked;
-    agvObj[constants::map::jsonKey::isMainBranch] = agvInfo.isMainBranch;
+    m_agvDoc[ constants::map::jsonKey::id ]                   = *agvInfo.id;
+    m_agvDoc[ constants::map::jsonKey::missionId ]            = *agvInfo.missionId;
+    m_agvDoc[ constants::map::jsonKey::leaveHomeActs ]        = *agvInfo.leaveHomeActs;
+    m_agvDoc[ constants::map::jsonKey::forwardDirHomingActs ] = *agvInfo.forwardDirHomingActs;
+    m_agvDoc[ constants::map::jsonKey::rewardDirHomingActs ]  = *agvInfo.rewardDirHomingActs;
+    m_agvDoc[ constants::map::jsonKey::currentLineCount ]     = agvInfo.currentLineCount;
+    m_agvDoc[ constants::map::jsonKey::isHome ]               = agvInfo.isHome;
+    m_agvDoc[ constants::map::jsonKey::isItemPicked ]         = agvInfo.isItemPicked;
+    m_agvDoc[ constants::map::jsonKey::isMainBranch ]         = agvInfo.isMainBranch;
 
-    serializeJsonPretty (agvObj, dst);
+    serializeJsonPretty (m_agvDoc, agvInfoStr);
 }
 
-int
-Map::getImportLineCount ()
-{
-    return 0;
-}
-
-int
-Map::getExportLineCount ()
-{
-    return 7;
-}
-
-bool
-Map::lineCountIsInMainBranch (int lineCount)
-{
-    return lineCount == getImportLineCount () || lineCount == getExportLineCount ();
-}
-
-DynamicJsonDocument mapMsgObj (6200);
-
-StorageMap::StorageMap ()
-{
-}
-
-bool
-StorageMap::parseMapMsg (String mapStr)
-{
-    DeserializationError error = deserializeJson (mapMsgObj, mapStr);
-
-    if (error)
-    {
-        Serial.print (F ("deserializeJson() failed: "));
-        Serial.println (error.c_str ());
-        return false;
-    }
-
-    return true;
-}
-
-MapSize
-StorageMap::mapSize ()
-{
-    MapSize size;
-    size.width = mapMsgObj["size"]["width"];
-    size.height = mapMsgObj["size"]["height"];
-
-    return size;
-}
-
-bool
-StorageMap::parseLineCountMsg (int &lineCount, String &lineCountMsg)
-{
-    DynamicJsonDocument lineCountMsgObj (256);
-    DeserializationError error = deserializeJson (lineCountMsgObj, lineCountMsg);
-
-    if (error)
-    {
-        lineCountMsgObj.clear ();
-        return false;
-    }
-
-    int posX = lineCountMsgObj["x"];
-    int posY = lineCountMsgObj["y"];
-
-    JsonArray nodes = mapMsgObj["nodes"];
-    for (JsonObject node : nodes)
-    {
-        JsonObject point = node["point"];
-        int nodeX = point["x"];
-        int nodeY = point["y"];
-
-        if (
-            posX == nodeX && posY == nodeY)
-        {
-            JsonObject data = node["data"];
-            lineCount = data["lineCount"];
-            break;
-        }
-    }
-
-    lineCountMsgObj.clear ();
-    return true;
-}
-
-int
-StorageMap::getImportLineCount ()
-{
-    return 0; // for testing
-
-    int lineCount = 0;
-
-    JsonArray nodes = mapMsgObj["nodes"];
-    for (JsonObject node : nodes)
-    {
-        String role = node["role"];
-        if (role == "importPallet")
-        {
-            JsonObject data = node["data"];
-            lineCount = data["lineCount"];
-            break;
-        }
-    }
-
-    return lineCount;
-}
-
-int
-StorageMap::getExportLineCount ()
-{
-    return 9;
-
-    int lineCount = 0;
-
-    JsonArray nodes = mapMsgObj["nodes"];
-    for (JsonObject node : nodes)
-    {
-        String role = node["role"];
-        if (role == "exportPallet")
-        {
-            JsonObject data = node["data"];
-            lineCount = data["lineCount"];
-            break;
-        }
-    }
-
-    return lineCount;
-}
-
-int
-StorageMap::getHomeLinecount ()
+int Map::getHomeLineCnt () const
 {
     return 1;
 }
 
-String
-StorageMap::lineCount2mapPosStr (int lineCount)
+int Map::getImportLineCount () const
 {
-    String mapPosStr = "";
+    // return 0;
 
-    JsonArray nodes = mapMsgObj["nodes"];
+    int lineCount = 0;
+
+    JsonArray nodes = m_mapDoc[ "nodes" ];
     for (JsonObject node : nodes)
     {
-        JsonObject data = node["data"];
-        int _lineCount = data["lineCount"];
-
-        if (
-            _lineCount == lineCount)
+        String role = node[ "role" ];
+        if (role == "importPallet")
         {
-            JsonObject pos = node["point"];
-            serializeJson (pos, mapPosStr);
+            JsonObject data = node[ "data" ];
+            lineCount       = data[ "lineCount" ];
             break;
         }
     }
 
-    return mapPosStr;
+    return lineCount;
+}
+
+int Map::getExportLineCount () const
+{
+    // return 7;
+
+    int lineCount = 0;
+
+    JsonArray nodes = m_mapDoc[ "nodes" ];
+    for (JsonObject node : nodes)
+    {
+        String role = node[ "role" ];
+        if (role == "exportPallet")
+        {
+            JsonObject data = node[ "data" ];
+            lineCount       = data[ "lineCount" ];
+            break;
+        }
+    }
+
+    return lineCount;
+}
+
+bool Map::isInMainBranch (int lineCount)
+{
+    return lineCount == getImportLineCount () || lineCount == getExportLineCount ();
 }

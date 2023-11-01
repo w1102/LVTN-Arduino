@@ -218,7 +218,7 @@ class NwState_subscribeMqtt : public NetworkManager
                     },
                     [&, agvInfoMsg] () mutable
                     {
-                        return Map::parseAgvInfo (agvInfo, agvInfoMsg);
+                        return Map::parseAgvInfo (agvInfoMsg, agvInfo);
                     });
             });
     }

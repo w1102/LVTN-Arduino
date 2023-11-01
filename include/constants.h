@@ -113,7 +113,7 @@ namespace constants
     namespace map {
        namespace jsonKey {
         inline constexpr char id[] {"id"};
-        inline constexpr char direction[] {"direction"};
+        inline constexpr char missionId[]{"missionId"};
         inline constexpr char leaveHomeActs[] {"leaveHomeActs"};
         inline constexpr char forwardDirHomingActs[] {"forwardDirHomingActs"};
         inline constexpr char rewardDirHomingActs[] {"rewardDirHomingActs"};
@@ -128,6 +128,7 @@ namespace constants
     {
         namespace jsonKey
         {
+            inline constexpr char id[]{"missionId"};
             inline constexpr char phase1[] { "phase1" };
             inline constexpr char phase2[] { "phase2" };
             inline constexpr char target[] { "target" };

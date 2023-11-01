@@ -5,7 +5,7 @@ dispatch_queue MainManager::dpQueue (
     constants::main::dpQueuethreadCnt,
     constants::main::dpQueueStackDepth);
 
-AGVInfo MainManager::agvInfo;
+AGVInfo MainManager::m_info;
 Mission MainManager::mission;
 
 L298N MainManager::lhsMotor (M1_EN, M1_PA, M1_PB);

@@ -29,8 +29,7 @@ typedef enum
 
 typedef struct
 {
-    String *id, *leaveHomeActs, *forwardDirHomingActs, *rewardDirHomingActs;
-    Direction direction;
+    String *id, *leaveHomeActs, *forwardDirHomingActs, *rewardDirHomingActs, *missionId;
     int currentLineCount;
     bool isHome, isMainBranch, isItemPicked;
 } AGVInfo;
@@ -66,26 +65,6 @@ typedef enum
     exportMission
 } MissionType;
 
-typedef enum
-{
-    phase1,
-    phase2
-} MissionPhase;
-
-typedef struct
-{
-    int target;
-    String *action;
-} MissionPhaseData;
-
-typedef struct
-{
-    MissionPhaseData phase1;
-    MissionPhaseData phase2;
-    bool stopInMainBranch;
-    MissionPhase currentPhase;
-    bool isHomingMission;
-} MissionData;
 
 typedef struct
 {

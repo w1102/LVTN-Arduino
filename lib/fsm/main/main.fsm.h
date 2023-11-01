@@ -66,22 +66,20 @@ class MainManager : public tinyfsm::Fsm<MainManager>
     static L298N lhsMotor, rhsMotor;
     static MakerLine makerLine;
     static Servo servo;
-    
-    static AGVInfo agvInfo;
-
+    static AGVInfo m_info;
     static Mission mission;
-
     static dispatch_queue dpQueue;
 
     static void onInterval (TimerHandle_t t);
     static bool isHaveForceAction();
 
-    void pushStatus (MainStatus status);
+    void putMainStatus (MainStatus status);
     void stopAgv();
     void timerInit (TimerCallbackFunction_t, TickType_t, UBaseType_t autoReaload = false);
     void timerStart ();
     void timerStop ();
     void timerDelete ();
+
 };
 
 using MainManagerFSM = tinyfsm::Fsm<MainManager>;
