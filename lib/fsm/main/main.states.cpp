@@ -33,14 +33,6 @@ class MainState_initialize: public MainManager
         servo.attach (SERVO, constants::main::servoUsLow, constants::main::servoUsHigh);
         servo.write (constants::main::servoPushIn);
 
-
-
-        // for(;;) {
-        //     int res = makerLine.readPosition();
-        //     Serial.println(res);
-        //     vTaskDelay(pdMS_TO_TICKS(5));
-        // }
-
         dpQueue.dispatch (
             [ = ] ()
             {
@@ -414,7 +406,7 @@ class MainState_turnLeft: public MainManager
         {
             lhsMotor.stop ();
             rhsMotor.forward ();
-            rhsMotor.setSpeed (constants::main::midSpeed);
+            rhsMotor.setSpeed (constants::main::lowSpeed);
         }
     }
 
@@ -475,7 +467,7 @@ class MainState_turnRight: public MainManager
         {
             rhsMotor.stop ();
             lhsMotor.forward ();
-            lhsMotor.setSpeed (constants::main::midSpeed);
+            lhsMotor.setSpeed (constants::main::lowSpeed);
         }
     }
 
@@ -493,6 +485,7 @@ class MainState_io: public MainManager
         dpQueue.dispatch (
             [ = ] ()
             {
+                vTaskDelay (constants::main::ioDelayMs);
                 servoPutOut ();
                 digitalWrite (MAGNET, m_info.isItemPicked ? constants::main::magnetOn : constants::main::magnetOff);
                 vTaskDelay (constants::main::ioDelayMs);
@@ -580,7 +573,7 @@ class MainState_turnBack: public MainManager
         }
         else
         {
-            rotation (constants::main::midSpeed);
+            rotation (constants::main::lowSpeed);
         }
     }
 

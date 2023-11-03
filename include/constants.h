@@ -7,7 +7,7 @@ namespace constants
 {
     namespace global
     {
-        inline constexpr uint8_t queueCnt { 20 };
+        inline constexpr uint8_t queueCnt { 10 };
         inline constexpr uint8_t intervalMs { pdMS_TO_TICKS (5) };
     }
 
@@ -19,8 +19,8 @@ namespace constants
         inline constexpr char taskName[] { "ultrasonic" };
 
         inline constexpr float speedOfSound { 0.034 };
-        inline constexpr float warnDistance { 13.0 };
-        inline constexpr float stopDistance { 5.0 };
+        inline constexpr float warnDistance { 20.0 };
+        inline constexpr float stopDistance { 6.0 };
     }
 
     namespace network
@@ -65,9 +65,9 @@ namespace constants
 
     namespace main
     {
-        inline constexpr double kp { 100 };
-        inline constexpr double ki { 0 };
-        inline constexpr double kd { 0 };
+        inline constexpr double kp { 80 };
+        inline constexpr double ki { 6 };
+        inline constexpr double kd { 0.1 };
 
         inline constexpr uint16_t lowSpeed { 600 };
         inline constexpr uint16_t midSpeed { 750 };
