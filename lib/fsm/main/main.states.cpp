@@ -478,13 +478,23 @@ class MainState_turnRight: public MainManager
 class MainState_io: public MainManager
 {
   public:
-    void
-        entry () override
+    void entry () override
     {
         m_info.isItemPicked = !m_info.isItemPicked;
         dpQueue.dispatch (
             [ = ] ()
             {
+                rhsMotor.forward ();
+                rhsMotor.setSpeed (constants::main::lowSpeed);
+                lhsMotor.forward ();
+                lhsMotor.setSpeed (constants::main::lowSpeed);
+
+                while (getUltrasonicDistance () > constants::ultrasonic::ioDistance)
+                    vTaskDelay (pdMS_TO_TICKS (constants::global::intervalMs));
+
+                rhsMotor.stop ();
+                lhsMotor.stop ();
+
                 vTaskDelay (constants::main::ioDelayMs);
                 servoPutOut ();
                 digitalWrite (MAGNET, m_info.isItemPicked ? constants::main::magnetOn : constants::main::magnetOff);
@@ -504,8 +514,7 @@ class MainState_io: public MainManager
     }
 
   private:
-    void
-        servoPutOut ()
+    void servoPutOut ()
     {
         for (int i = constants::main::servoPushIn; i <= constants::main::servoPushOut; i++)
         {
@@ -514,14 +523,22 @@ class MainState_io: public MainManager
         }
     }
 
-    void
-        servoPutIn ()
+    void servoPutIn ()
     {
         for (int i = constants::main::servoPushOut; i >= constants::main::servoPushIn; i--)
         {
             servo.write (i);
             vTaskDelay (constants::main::servoDelayMs);
         }
+    }
+
+    float getUltrasonicDistance ()
+    {
+        xSemaphoreTake (global::ultrasonicDistanceMutex, portMAX_DELAY);
+        float ultrasonicDistance = global::ultrasonicDistance;
+        xSemaphoreGive (global::ultrasonicDistanceMutex);
+
+        return ultrasonicDistance;
     }
 };
 
@@ -553,7 +570,9 @@ class MainState_turnBack: public MainManager
         }
         else if (step == 0)
         {
-            rotation (constants::main::higSpeed);
+            rotation (m_info.isItemPicked 
+            ? constants::main::veryLowSpeed 
+            : constants::main::higSpeed);
         }
         else if (pos >= -1 && pos <= 1)
         {

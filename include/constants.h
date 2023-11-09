@@ -20,7 +20,8 @@ namespace constants
 
         inline constexpr float speedOfSound { 0.034 };
         inline constexpr float warnDistance { 20.0 };
-        inline constexpr float stopDistance { 6.0 };
+        inline constexpr float stopDistance { 5 };
+        inline constexpr float ioDistance { 7.5 };
     }
 
     namespace network
@@ -69,6 +70,7 @@ namespace constants
         inline constexpr double ki { 6 };
         inline constexpr double kd { 0.1 };
 
+        inline constexpr uint16_t veryLowSpeed { 470 };
         inline constexpr uint16_t lowSpeed { 600 };
         inline constexpr uint16_t midSpeed { 750 };
         inline constexpr uint16_t higSpeed { 850 };
